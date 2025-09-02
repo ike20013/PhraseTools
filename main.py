@@ -371,8 +371,8 @@ class MainPhraseTable(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.setColumnWidth(0, 30)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        self.setColumnWidth(2, 120)
+        # Частотность автоматически подстраивается под содержимое
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
 
         # Включаем сортировку
         self.setSortingEnabled(True)
@@ -410,6 +410,26 @@ class MainPhraseTable(QTableWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.verticalHeader().setVisible(False)
 
+    def _get_table_data(self) -> List[Tuple[str, int]]:
+        """Получение данных из текущей таблицы"""
+        data = []
+        for row in range(self.rowCount()):
+            phrase = self.item(row, 1).text()
+            freq_item = self.item(row, 2)
+            if isinstance(freq_item, FrequencyTableWidgetItem):
+                freq = freq_item.value
+            else:
+                freq = int(freq_item.text()) if freq_item.text().isdigit() else 0
+            data.append((phrase, freq))
+        return data
+
+    def sortByColumn(self, column: int, order: Qt.SortOrder):
+        """Переопределение сортировки для обновления данных и истории"""
+        self.save_state()
+        super().sortByColumn(column, order)
+        self.current_data = self._get_table_data()
+        self.history.add_state(self.current_data)
+
     def contextMenuEvent(self, event):
         """Создание контекстного меню"""
         menu = QMenu(self)
@@ -427,6 +447,13 @@ class MainPhraseTable(QTableWidget):
                 border-radius: 4px;
             }
         """)
+
+        clicked_row = self.rowAt(event.pos().y())
+
+        if clicked_row != -1:
+            delete_row_action = menu.addAction("🗑 Удалить эту фразу")
+            delete_row_action.triggered.connect(lambda: self.delete_row(clicked_row))
+            menu.addSeparator()
 
         # Действия с выделением
         select_all = menu.addAction("☑️ Выделить все")
@@ -519,6 +546,27 @@ class MainPhraseTable(QTableWidget):
         # Обновляем данные
         self.current_data = new_data
         self.update_table(self.current_data, save_history=False)
+        self.history.add_state(self.current_data)
+
+    def delete_row(self, row: int):
+        """Удаление одной фразы по номеру строки"""
+        if row < 0 or row >= self.rowCount():
+            return
+        self.save_state()
+        new_data = []
+        for i in range(self.rowCount()):
+            if i == row:
+                continue
+            phrase = self.item(i, 1).text()
+            freq_item = self.item(i, 2)
+            if isinstance(freq_item, FrequencyTableWidgetItem):
+                freq = freq_item.value
+            else:
+                freq = int(freq_item.text()) if freq_item.text().isdigit() else 0
+            new_data.append((phrase, freq))
+        self.current_data = new_data
+        self.update_table(self.current_data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def save_state(self):
         """Сохранение текущего состояния для истории"""
@@ -674,6 +722,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.remove_duplicates(self.current_data)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def remove_special_chars(self):
         """Удаление спецсимволов"""
@@ -681,6 +730,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.remove_special_chars(self.current_data)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def remove_long_phrases(self):
         """Удаление длинных фраз"""
@@ -688,6 +738,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.remove_long_phrases(self.current_data, 7)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def convert_case(self, to_upper: bool):
         """Преобразование регистра"""
@@ -695,6 +746,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.convert_case(self.current_data, to_upper)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def sort_alphabetically(self, reverse: bool):
         """Сортировка по алфавиту"""
@@ -702,6 +754,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.sort_phrases_alphabetically(self.current_data, reverse)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def sort_by_frequency(self, reverse: bool):
         """Сортировка по частотности"""
@@ -709,6 +762,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.sort_phrases_by_frequency(self.current_data, reverse)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
     def transliterate(self, reverse: bool = False):
         """Транслитерация фраз"""
@@ -716,6 +770,7 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.transliterate_phrases(self.current_data, reverse)
         self.current_data = data
         self.update_table(data, save_history=False)
+        self.history.add_state(self.current_data)
 
 
 class FileLoader(QThread):
@@ -994,13 +1049,14 @@ class MainWindow(QMainWindow):
 
         # Главный layout с минимальными отступами
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(5)
+        # Минимальные отступы для более плотного интерфейса
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         central_widget.setLayout(main_layout)
 
         # Панель инструментов
         toolbar_layout = QHBoxLayout()
-        toolbar_layout.setContentsMargins(5, 5, 5, 5)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
 
         self.load_btn = QPushButton("📁 Загрузить файлы")
         self.load_btn.clicked.connect(self.load_files)
@@ -1036,7 +1092,7 @@ class MainWindow(QMainWindow):
         # Левая панель - основная таблица
         left_panel = QWidget()
         left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(5, 5, 5, 5)
+        left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(5)
 
         editor_label = QLabel("📝 Фразы")
