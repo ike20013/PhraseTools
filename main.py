@@ -223,7 +223,7 @@ class SearchWidget(QWidget):
 
     def setup_ui(self):
         layout = QHBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Поле поиска
         self.search_input = QLineEdit()
@@ -232,25 +232,25 @@ class SearchWidget(QWidget):
         self.search_input.setStyleSheet("""
             QLineEdit {
                 padding: 6px 10px;
-                border: 1px solid #b0b0b0;
+                border: 1px solid #333333;
                 border-radius: 6px;
-                background-color: #ffffff;
-                color: #333333;
+                background-color: #1e1e2f;
+                color: #e0e0ff;
                 font-size: 14px;
             }
             QLineEdit:focus {
-                border: 1px solid #007aff;
-                background-color: #f0f8ff;
+                border: 1px solid #00d1ff;
+                background-color: #2a2a40;
             }
             QLineEdit::placeholder {
-                color: #888888;
+                color: #555555;
             }
         """)
         layout.addWidget(self.search_input)
 
         # Чекбокс "Только совпадения"
         self.only_matches = QCheckBox("Только совпадения")
-        self.only_matches.setStyleSheet("QCheckBox { font-size: 13px; }")
+        self.only_matches.setStyleSheet("QCheckBox { font-size: 13px; color: #e0e0ff; }")
         self.only_matches.toggled.connect(self.on_filter_changed)
         layout.addWidget(self.only_matches)
 
@@ -260,18 +260,20 @@ class SearchWidget(QWidget):
         self.prev_btn.setEnabled(False)
         self.prev_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
+                background-color: #2d2d3c;
+                border: 1px solid #00d1ff;
                 border-radius: 17px;
                 font-size: 16px;
+                color: #00d1ff;
             }
             QPushButton:hover:enabled {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
             QPushButton:disabled {
-                background-color: #f8f8f8;
-                color: #c0c0c0;
+                background-color: #1a1a24;
+                color: #555555;
+                border: 1px solid #333333;
             }
         """)
         layout.addWidget(self.prev_btn)
@@ -281,18 +283,20 @@ class SearchWidget(QWidget):
         self.next_btn.setEnabled(False)
         self.next_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
+                background-color: #2d2d3c;
+                border: 1px solid #00d1ff;
                 border-radius: 17px;
                 font-size: 16px;
+                color: #00d1ff;
             }
             QPushButton:hover:enabled {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
             QPushButton:disabled {
-                background-color: #f8f8f8;
-                color: #c0c0c0;
+                background-color: #1a1a24;
+                color: #555555;
+                border: 1px solid #333333;
             }
         """)
         layout.addWidget(self.next_btn)
@@ -303,9 +307,9 @@ class SearchWidget(QWidget):
             QLabel {
                 font-size: 13px;
                 font-weight: 500;
-                color: #007aff;
+                color: #00d1ff;
                 padding: 5px 10px;
-                background-color: #e6f2ff;
+                background-color: #1a1a24;
                 border-radius: 10px;
             }
         """)
@@ -385,27 +389,27 @@ class MainPhraseTable(QTableWidget):
         # Стиль таблицы
         self.setStyleSheet("""
             QTableWidget {
-                background-color: #ffffff;
-                color: #000000;
-                gridline-color: #d0d0d0;
-                border: 1px solid #d0d0d0;
+                background-color: #0d1117;
+                color: #e6e6e6;
+                gridline-color: #222831;
+                border: 1px solid #222831;
                 font-family: "SF Pro Display", -apple-system, sans-serif;
                 font-size: 13px;
             }
             QTableWidget::item {
                 padding: 4px;
-                border-bottom: 1px solid #e0e0e0;
+                border-bottom: 1px solid #222831;
             }
             QTableWidget::item:selected {
-                background-color: #cde5ff;
-                color: #000000;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
             QHeaderView::section {
-                background-color: #f5f5f5;
-                color: #333333;
+                background-color: #151a24;
+                color: #00d1ff;
                 padding: 6px;
                 border: none;
-                border-bottom: 2px solid #d0d0d0;
+                border-bottom: 2px solid #222831;
                 font-weight: 500;
             }
         """)
@@ -428,27 +432,31 @@ class MainPhraseTable(QTableWidget):
             data.append((phrase, freq))
         return data
 
-    def sortByColumn(self, column: int, order: Qt.SortOrder):
+    def sortItems(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder):
         """Переопределение сортировки для обновления данных и истории"""
         self.save_state()
-        super().sortByColumn(column, order)
+        super().sortItems(column, order)
         self.current_data = self._get_table_data()
         self.history.add_state(self.current_data)
+
+    def sortByColumn(self, column: int, order: Qt.SortOrder):
+        """Совместимость с вызовами sortByColumn"""
+        self.sortItems(column, order)
 
     def contextMenuEvent(self, event):
         """Создание контекстного меню"""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #d0d0d0;
+                background-color: #1e1e2f;
+                color: #e6e6e6;
+                border: 1px solid #333333;
                 border-radius: 6px;
                 padding: 5px;
             }
             QMenu::item:selected {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
                 border-radius: 4px;
             }
         """)
@@ -644,15 +652,15 @@ class MainPhraseTable(QTableWidget):
     def get_frequency_color(self, freq: int) -> QColor:
         """Получение цвета в зависимости от частотности"""
         if freq >= 100000:
-            return QColor(255, 220, 220)  # Красноватый для высокой частотности
+            return QColor(70, 0, 90)
         elif freq >= 10000:
-            return QColor(255, 235, 215)  # Оранжевый
+            return QColor(20, 20, 90)
         elif freq >= 1000:
-            return QColor(255, 250, 220)  # Желтый
+            return QColor(0, 60, 80)
         elif freq >= 100:
-            return QColor(235, 255, 235)  # Светло-зеленый
+            return QColor(0, 80, 40)
         else:
-            return QColor(250, 250, 250)  # Очень светло-серый для низкой
+            return QColor(30, 30, 30)
 
     def set_stop_words(self, stop_words: Set[str]):
         """Установка стоп-слов и обновление таблицы"""
@@ -822,7 +830,7 @@ class StopWordsWidget(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Заголовок
         header = QLabel("🚫 Стоп-слова")
@@ -836,10 +844,10 @@ class StopWordsWidget(QWidget):
         self.input_field.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
-                border: 1px solid #d0d0d0;
+                border: 1px solid #333333;
                 border-radius: 6px;
-                background-color: #ffffff;
-                color: #000000;
+                background-color: #1e1e2f;
+                color: #e0e0ff;
             }
         """)
         layout.addWidget(self.input_field)
@@ -848,17 +856,17 @@ class StopWordsWidget(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setStyleSheet("""
             QListWidget {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #d0d0d0;
+                background-color: #0d1117;
+                color: #e6e6e6;
+                border: 1px solid #333333;
                 border-radius: 6px;
             }
             QListWidget::item {
                 padding: 4px;
             }
             QListWidget::item:selected {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
         """)
         layout.addWidget(self.list_widget)
@@ -913,7 +921,7 @@ class GroupingWidget(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Заголовок и кнопка экспорта
         header_layout = QHBoxLayout()
@@ -935,24 +943,24 @@ class GroupingWidget(QWidget):
         self.tree.setHeaderLabels(["Группа / Фраза", "Частотность"])
         self.tree.setStyleSheet("""
             QTreeWidget {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #d0d0d0;
+                background-color: #0d1117;
+                color: #e6e6e6;
+                border: 1px solid #333333;
                 border-radius: 6px;
             }
             QTreeWidget::item {
                 padding: 2px;
             }
             QTreeWidget::item:selected {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
             QHeaderView::section {
-                background-color: #f5f5f5;
-                color: #333333;
+                background-color: #151a24;
+                color: #00d1ff;
                 padding: 6px;
                 border: none;
-                border-bottom: 1px solid #d0d0d0;
+                border-bottom: 1px solid #333333;
                 font-weight: 500;
             }
         """)
@@ -1066,7 +1074,7 @@ class MainWindow(QMainWindow):
 
         self.filtered_count_label = QLabel("")
         self.filtered_count_label.setFont(QFont("SF Pro Display", 12))
-        self.filtered_count_label.setStyleSheet("color: #007aff;")
+        self.filtered_count_label.setStyleSheet("color: #00d1ff;")
         toolbar_layout.addWidget(self.filtered_count_label)
 
         main_layout.addLayout(toolbar_layout)
@@ -1101,21 +1109,21 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 1px solid #d0d0d0;
-                background-color: #ffffff;
+                border: 1px solid #222831;
+                background-color: #0d1117;
                 border-radius: 6px;
             }
             QTabBar::tab {
-                background-color: #f5f5f5;
-                color: #333333;
+                background-color: #151a24;
+                color: #e6e6e6;
                 padding: 8px 16px;
                 margin-right: 2px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
             }
             QTabBar::tab:selected {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
             }
         """)
 
@@ -1158,11 +1166,11 @@ class MainWindow(QMainWindow):
         """Настройка стилей"""
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f5f5f5;
+                background-color: #0d1117;
             }
             QPushButton {
-                background-color: #007aff;
-                color: white;
+                background-color: #00d1ff;
+                color: #0d1117;
                 border: none;
                 padding: 8px 16px;
                 border-radius: 6px;
@@ -1170,13 +1178,13 @@ class MainWindow(QMainWindow):
                 font-size: 13px;
             }
             QPushButton:hover {
-                background-color: #0051d5;
+                background-color: #00b5d8;
             }
             QPushButton:pressed {
-                background-color: #0041a8;
+                background-color: #0090ab;
             }
             QLabel {
-                color: #333333;
+                color: #e6e6e6;
             }
         """)
 
