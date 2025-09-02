@@ -231,14 +231,19 @@ class SearchWidget(QWidget):
         self.search_input.textChanged.connect(self.on_search_changed)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                padding: 8px 12px;
-                border: 2px solid #e0e0e0;
-                border-radius: 20px;
+                padding: 6px 10px;
+                border: 1px solid #b0b0b0;
+                border-radius: 6px;
                 background-color: #ffffff;
+                color: #333333;
                 font-size: 14px;
             }
             QLineEdit:focus {
-                border: 2px solid #007aff;
+                border: 1px solid #007aff;
+                background-color: #f0f8ff;
+            }
+            QLineEdit::placeholder {
+                color: #888888;
             }
         """)
         layout.addWidget(self.search_input)
@@ -392,8 +397,8 @@ class MainPhraseTable(QTableWidget):
                 border-bottom: 1px solid #e0e0e0;
             }
             QTableWidget::item:selected {
-                background-color: #007aff;
-                color: white;
+                background-color: #cde5ff;
+                color: #000000;
             }
             QHeaderView::section {
                 background-color: #f5f5f5;
@@ -532,18 +537,12 @@ class MainPhraseTable(QTableWidget):
         self.save_state()
 
         # Собираем невыбранные фразы
-        new_data = []
-        for row in range(self.rowCount()):
-            if self.item(row, 0).checkState() != Qt.CheckState.Checked:
-                phrase = self.item(row, 1).text()
-                freq_item = self.item(row, 2)
-                if isinstance(freq_item, FrequencyTableWidgetItem):
-                    freq = freq_item.value
-                else:
-                    freq = int(freq_item.text()) if freq_item.text().isdigit() else 0
-                new_data.append((phrase, freq))
+        new_data = [
+            row_data
+            for i, row_data in enumerate(self.current_data)
+            if self.item(i, 0).checkState() != Qt.CheckState.Checked
+        ]
 
-        # Обновляем данные
         self.current_data = new_data
         self.update_table(self.current_data, save_history=False)
         self.history.add_state(self.current_data)
@@ -553,23 +552,16 @@ class MainPhraseTable(QTableWidget):
         if row < 0 or row >= self.rowCount():
             return
         self.save_state()
-        new_data = []
-        for i in range(self.rowCount()):
-            if i == row:
-                continue
-            phrase = self.item(i, 1).text()
-            freq_item = self.item(i, 2)
-            if isinstance(freq_item, FrequencyTableWidgetItem):
-                freq = freq_item.value
-            else:
-                freq = int(freq_item.text()) if freq_item.text().isdigit() else 0
-            new_data.append((phrase, freq))
-        self.current_data = new_data
+        data = self.current_data.copy()
+        if 0 <= row < len(data):
+            del data[row]
+        self.current_data = data
         self.update_table(self.current_data, save_history=False)
         self.history.add_state(self.current_data)
 
     def save_state(self):
         """Сохранение текущего состояния для истории"""
+        self.current_data = self._get_table_data()
         self.history.add_state(self.current_data)
 
     def undo(self):
@@ -621,32 +613,32 @@ class MainPhraseTable(QTableWidget):
         self.search_results = []
 
         for i, (phrase, freq) in enumerate(display_data):
-            # Чекбокс
+            # Элементы строки
             checkbox = QTableWidgetItem()
             checkbox.setCheckState(Qt.CheckState.Unchecked)
-            self.setItem(i, 0, checkbox)
 
-            # Фраза с подсветкой поиска
             phrase_item = QTableWidgetItem(phrase)
-
-            # Подсветка поискового запроса
-            if self.search_text and self.search_text.lower() in phrase.lower():
-                phrase_item.setBackground(QBrush(QColor(255, 243, 179)))  # Мягкий желтый
-                phrase_item.setForeground(QBrush(QColor(50, 50, 50)))  # Темный текст
-                self.search_results.append(i)
-
-            # Цветовая индикация по частотности для всей строки
-            color = self.get_frequency_color(freq)
-            if not self.search_text or self.search_text.lower() not in phrase.lower():
-                phrase_item.setBackground(QBrush(color))
-
-            self.setItem(i, 1, phrase_item)
-
-            # Частотность с правильной сортировкой
             freq_item = FrequencyTableWidgetItem(freq)
             freq_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            freq_item.setBackground(QBrush(color))
 
+            # Цветовая индикация по частотности
+            color = self.get_frequency_color(freq)
+            for item in (checkbox, phrase_item, freq_item):
+                item.setBackground(QBrush(color))
+
+            # Подсветка результатов поиска
+            if self.search_text and self.search_text.lower() in phrase.lower():
+                self.search_results.append(i)
+                bold_font = phrase_item.font()
+                bold_font.setBold(True)
+                phrase_item.setFont(bold_font)
+
+                bold_freq = freq_item.font()
+                bold_freq.setBold(True)
+                freq_item.setFont(bold_freq)
+
+            self.setItem(i, 0, checkbox)
+            self.setItem(i, 1, phrase_item)
             self.setItem(i, 2, freq_item)
 
     def get_frequency_color(self, freq: int) -> QColor:
@@ -1148,16 +1140,18 @@ class MainWindow(QMainWindow):
 
     def setup_shortcuts(self):
         """Настройка горячих клавиш"""
-        # Cmd+Z для отмены
-        undo_shortcut = QShortcut(QKeySequence("Cmd+Z"), self)
+        # Undo/Redo
+        undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
+        undo_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
         undo_shortcut.activated.connect(self.main_table.undo)
 
-        # Cmd+Shift+Z для повтора
-        redo_shortcut = QShortcut(QKeySequence("Cmd+Shift+Z"), self)
+        redo_shortcut = QShortcut(QKeySequence.StandardKey.Redo, self)
+        redo_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
         redo_shortcut.activated.connect(self.main_table.redo)
 
-        # Cmd+F для поиска
-        search_shortcut = QShortcut(QKeySequence("Cmd+F"), self)
+        # Поиск
+        search_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        search_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
         search_shortcut.activated.connect(lambda: self.search_widget.search_input.setFocus())
 
     def setup_style(self):
