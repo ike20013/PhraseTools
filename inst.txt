@@ -1,0 +1,16 @@
+python3.11 -m venv .venv
+
+chmod +x ./venv/bin/activate
+source ./venv/bin/activate
+
+pip install PyQt6
+pip install pandas
+pip install transliterate
+pip install openpyxl
+pip install PyInstaller
+
+chmod +x ./build_macos_app_dmg.sh
+./build_macos_app_dmg.sh -v 1.0.0
+
+if error: ERROR: The 'pathlib' package is an obsolete backport
+conda remove pathlib
