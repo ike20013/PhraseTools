@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PhraseTools - Elegant SEO Management Tool
+KeyPhrase Manager Pro - Modern SEO Tool
 Автор: Assistant
 Python 3.11+ / macOS
 """
@@ -108,6 +108,14 @@ class HistoryManager:
             self.current_index += 1
             return copy.deepcopy(self.history[self.current_index])
         return None
+
+    def can_undo(self) -> bool:
+        """Можно ли отменить"""
+        return self.current_index > 0
+
+    def can_redo(self) -> bool:
+        """Можно ли повторить"""
+        return self.current_index < len(self.history) - 1
 
 
 class PhraseProcessor:
@@ -220,8 +228,35 @@ class PhraseProcessor:
         return dict(groups)
 
 
+class ModernButton(QPushButton):
+    """Современная кнопка в стиле macOS"""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setup_style()
+
+    def setup_style(self):
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #007aff;
+                border: 1px solid #c7c7cc;
+                padding: 6px 12px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #f2f2f7;
+            }
+            QPushButton:pressed {
+                background-color: #e5e5ea;
+            }
+        """)
+
+
 class SearchWidget(QWidget):
-    """Элегантный виджет поиска"""
+    """Современный виджет поиска в стиле macOS"""
 
     search_changed = pyqtSignal(str, bool)
 
@@ -231,7 +266,21 @@ class SearchWidget(QWidget):
 
     def setup_ui(self):
         layout = QHBoxLayout()
-        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(8)
+
+        # Контейнер для поиска
+        search_container = QWidget()
+        search_container.setStyleSheet("""
+            QWidget {
+                background: #ffffff;
+                border-radius: 8px;
+                border: 1px solid #c7c7cc;
+            }
+        """)
+        search_layout = QHBoxLayout()
+        search_layout.setContentsMargins(8, 4, 8, 4)
+        search_layout.setSpacing(8)
 
         # Поле поиска
         self.search_input = QLineEdit()
@@ -239,53 +288,65 @@ class SearchWidget(QWidget):
         self.search_input.textChanged.connect(self.on_search_changed)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px 15px;
-                border: 2px solid #e0e0e0;
-                border-radius: 20px;
-                background-color: #ffffff;
-                font-size: 14px;
-                font-family: 'Georgia', serif;
+                background: transparent;
+                border: none;
+                color: #000000;
+                font-size: 13px;
             }
-            QLineEdit:focus {
-                border: 2px solid #8B4513;
+            QLineEdit::placeholder {
+                color: #8e8e93;
             }
         """)
-        layout.addWidget(self.search_input)
+        search_layout.addWidget(self.search_input)
 
         # Чекбокс "Только совпадения"
         self.only_matches = QCheckBox("Только совпадения")
         self.only_matches.setStyleSheet("""
             QCheckBox {
-                font-family: 'Georgia', serif;
-                color: #4a4a4a;
+                color: #000000;
+                font-size: 12px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                border: 1px solid #c7c7cc;
+                background: #ffffff;
+            }
+            QCheckBox::indicator:checked {
+                background: #007aff;
+                border: 1px solid #007aff;
             }
         """)
         self.only_matches.toggled.connect(self.on_filter_changed)
-        layout.addWidget(self.only_matches)
+        search_layout.addWidget(self.only_matches)
+
+        search_container.setLayout(search_layout)
+        layout.addWidget(search_container)
 
         # Кнопки навигации
         self.prev_btn = QPushButton("◀")
-        self.prev_btn.setFixedSize(35, 35)
+        self.prev_btn.setFixedSize(30, 24)
         self.prev_btn.setEnabled(False)
         self.prev_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f5f5f5;
-                border: 1px solid #d0d0d0;
-                border-radius: 17px;
-                font-size: 14px;
+                background: #ffffff;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                color: #007aff;
+                font-size: 12px;
             }
             QPushButton:hover:enabled {
-                background-color: #8B4513;
-                color: white;
+                background: #f2f2f7;
             }
             QPushButton:disabled {
-                color: #c0c0c0;
+                color: #c7c7cc;
             }
         """)
         layout.addWidget(self.prev_btn)
 
         self.next_btn = QPushButton("▶")
-        self.next_btn.setFixedSize(35, 35)
+        self.next_btn.setFixedSize(30, 24)
         self.next_btn.setEnabled(False)
         self.next_btn.setStyleSheet(self.prev_btn.styleSheet())
         layout.addWidget(self.next_btn)
@@ -294,16 +355,16 @@ class SearchWidget(QWidget):
         self.result_label = QLabel("")
         self.result_label.setStyleSheet("""
             QLabel {
-                font-family: 'Georgia', serif;
-                font-size: 13px;
-                color: #8B4513;
-                padding: 5px 10px;
+                font-size: 12px;
+                color: #8e8e93;
+                padding: 0 8px;
             }
         """)
         layout.addWidget(self.result_label)
 
         layout.addStretch()
         self.setLayout(layout)
+        self.setMaximumHeight(40)
 
     def on_search_changed(self):
         text = self.search_input.text()
@@ -318,7 +379,7 @@ class SearchWidget(QWidget):
 
     def update_results(self, current: int, total: int):
         if total > 0:
-            self.result_label.setText(f"Найдено: {current}/{total}")
+            self.result_label.setText(f"{current}/{total}")
             self.result_label.show()
         else:
             self.result_label.hide()
@@ -347,7 +408,7 @@ class CheckboxTableWidgetItem(QTableWidgetItem):
 
 
 class MainPhraseTable(QTableWidget):
-    """Элегантная таблица с фразами"""
+    """Современная таблица с фразами в стиле macOS"""
 
     phrases_to_folder = pyqtSignal(list)  # Сигнал для добавления в папку
 
@@ -366,102 +427,108 @@ class MainPhraseTable(QTableWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        """Настройка элегантного дизайна таблицы"""
+        """Настройка дизайна таблицы в стиле macOS"""
         self.setColumnCount(3)
         self.setHorizontalHeaderLabels(["", "Фраза", "Частотность"])
 
-        # Настройка ширины колонок (можно изменять)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.setColumnWidth(0, 40)
-        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.setColumnWidth(2, 120)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.setColumnWidth(2, 130)
 
-        # Включаем изменение размера колонок
-        self.horizontalHeader().setStretchLastSection(False)
-
-        # Включаем сортировку
         self.setSortingEnabled(True)
 
-        # Элегантный стиль
         self.setStyleSheet("""
             QTableWidget {
                 background-color: #ffffff;
-                color: #2c2c2c;
-                gridline-color: #e8e8e8;
-                border: 1px solid #d0d0d0;
-                font-family: 'Georgia', serif;
-                font-size: 14px;
+                color: #000000;
+                gridline-color: #e5e5ea;
+                border: 1px solid #c7c7cc;
+                border-radius: 8px;
+                font-family: -apple-system, BlinkMacSystemFont;
+                font-size: 13px;
             }
             QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #f0f0f0;
+                padding: 6px;
+                border-bottom: 1px solid #f2f2f7;
             }
             QTableWidget::item:selected {
-                background-color: #f5e6d3;
-                color: #2c2c2c;
+                background-color: #e5e5ea;
+                color: #000000;
             }
             QTableWidget::item:hover {
-                background-color: #fafafa;
+                background-color: #f2f2f7;
             }
             QHeaderView::section {
-                background-color: #f8f8f8;
-                color: #2c2c2c;
-                padding: 10px;
+                background-color: #f2f2f7;
+                color: #000000;
+                padding: 8px;
                 border: none;
-                border-bottom: 2px solid #8B4513;
+                border-bottom: 1px solid #c7c7cc;
                 font-weight: 600;
-                font-family: 'Georgia', serif;
+            }
+            QScrollBar:vertical {
+                background: #f2f2f7;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c7c7cc;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #a0a0a5;
             }
         """)
 
         self.setAlternatingRowColors(True)
+        self.setAlternatingRowColors(False)  # Отключаем для macOS стиля
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.verticalHeader().setVisible(False)
 
     def contextMenuEvent(self, event):
-        """Создание элегантного контекстного меню"""
+        """Создание контекстного меню в стиле macOS"""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
                 background-color: #ffffff;
-                color: #2c2c2c;
-                border: 1px solid #d0d0d0;
+                color: #000000;
+                border: 1px solid #c7c7cc;
                 border-radius: 8px;
-                padding: 8px;
-                font-family: 'Georgia', serif;
+                padding: 5px;
+                font-family: -apple-system, BlinkMacSystemFont;
+                font-size: 13px;
             }
             QMenu::item {
-                padding: 8px 20px;
+                padding: 6px 20px;
                 border-radius: 4px;
             }
             QMenu::item:selected {
-                background-color: #f5e6d3;
+                background-color: #e5e5ea;
             }
             QMenu::separator {
                 height: 1px;
-                background: #e0e0e0;
+                background: #e5e5ea;
                 margin: 5px 0;
             }
         """)
 
         current_row = self.currentRow()
 
-        # Удаление текущей фразы
         if current_row >= 0:
             delete_current = menu.addAction("Удалить эту фразу")
             delete_current.triggered.connect(lambda: self.delete_phrase(current_row))
             menu.addSeparator()
 
-        # Добавление в папку
         if self.folders:
             folder_menu = menu.addMenu("Добавить в папку")
             for folder_name in self.folders.keys():
-                action = folder_menu.addAction(f"📁 {folder_name}")
+                action = folder_menu.addAction(folder_name)
                 action.triggered.connect(lambda checked, fn=folder_name: self.add_selected_to_folder(fn))
             menu.addSeparator()
 
-        # Действия с выделением
         select_all = menu.addAction("Выделить все")
         select_all.triggered.connect(self.select_all)
 
@@ -520,11 +587,9 @@ class MainPhraseTable(QTableWidget):
         menu.exec(event.globalPos())
 
     def set_folders(self, folders: Dict[str, Folder]):
-        """Установка списка папок"""
         self.folders = folders
 
     def add_selected_to_folder(self, folder_name: str):
-        """Добавление выбранных фраз в папку"""
         selected_phrases = []
         for row in range(self.rowCount()):
             checkbox_item = self.item(row, 0)
@@ -537,16 +602,13 @@ class MainPhraseTable(QTableWidget):
                 elif freq_item:
                     freq = int(freq_item.text()) if freq_item.text().isdigit() else 0
                 selected_phrases.append((phrase, freq))
-                # Снимаем галочку после добавления
                 checkbox_item.setCheckState(Qt.CheckState.Unchecked)
 
         if selected_phrases:
             self.phrases_to_folder.emit([(folder_name, phrase, freq) for phrase, freq in selected_phrases])
 
     def delete_phrase(self, visual_row: int):
-        """Удаление конкретной фразы по визуальной строке"""
         self.save_state()
-
         phrase_item = self.item(visual_row, 1)
         if phrase_item:
             phrase_to_delete = phrase_item.text()
@@ -557,23 +619,19 @@ class MainPhraseTable(QTableWidget):
             self.update_table(self.current_data, save_history=False)
 
     def select_all(self):
-        """Выделить все фразы"""
         for row in range(self.rowCount()):
             checkbox_item = self.item(row, 0)
             if checkbox_item:
                 checkbox_item.setCheckState(Qt.CheckState.Checked)
 
     def deselect_all(self):
-        """Снять выделение со всех фраз"""
         for row in range(self.rowCount()):
             checkbox_item = self.item(row, 0)
             if checkbox_item:
                 checkbox_item.setCheckState(Qt.CheckState.Unchecked)
 
     def delete_selected(self):
-        """Удаление выбранных фраз"""
         self.save_state()
-
         phrases_to_delete = set()
         for row in range(self.rowCount()):
             checkbox_item = self.item(row, 0)
@@ -590,32 +648,27 @@ class MainPhraseTable(QTableWidget):
         self.update_table(self.current_data, save_history=False)
 
     def save_state(self):
-        """Сохранение текущего состояния для истории"""
         self.history.add_state(self.current_data)
 
     def undo(self):
-        """Отмена последнего действия"""
         state = self.history.undo()
         if state:
             self.current_data = state
             self.update_table(self.current_data, save_history=False)
 
     def redo(self):
-        """Повтор отмененного действия"""
         state = self.history.redo()
         if state:
             self.current_data = state
             self.update_table(self.current_data, save_history=False)
 
     def load_phrases(self, phrases: List[Phrase]):
-        """Загрузка фраз в таблицу"""
         self.original_data = [(p.text, p.frequency) for p in phrases]
         self.current_data = self.original_data.copy()
         self.history.set_initial_state(self.current_data)
         self.update_table(self.current_data, save_history=False)
 
     def update_table(self, data: List[Tuple[str, int]], save_history: bool = True):
-        """Обновление таблицы"""
         if save_history:
             self.save_state()
 
@@ -638,16 +691,14 @@ class MainPhraseTable(QTableWidget):
         self.search_results = []
 
         for i, (phrase, freq) in enumerate(display_data):
-            # Чекбокс
             checkbox = CheckboxTableWidgetItem()
             checkbox.setCheckState(Qt.CheckState.Unchecked)
             self.setItem(i, 0, checkbox)
 
-            # Фраза
             phrase_item = QTableWidgetItem(phrase)
 
             if self.search_text and self.search_text.lower() in phrase.lower():
-                phrase_item.setBackground(QBrush(QColor(255, 243, 200)))
+                phrase_item.setBackground(QBrush(QColor(229, 243, 255)))
                 self.search_results.append(i)
             else:
                 color = self.get_frequency_color(freq)
@@ -655,27 +706,25 @@ class MainPhraseTable(QTableWidget):
 
             self.setItem(i, 1, phrase_item)
 
-            # Частотность
             freq_item = FrequencyTableWidgetItem(freq)
             freq_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             if freq >= 100000:
-                freq_item.setForeground(QBrush(QColor(139, 0, 0)))
+                freq_item.setForeground(QBrush(QColor(255, 59, 48)))
             elif freq >= 10000:
-                freq_item.setForeground(QBrush(QColor(184, 134, 11)))
+                freq_item.setForeground(QBrush(QColor(255, 149, 0)))
             elif freq >= 1000:
-                freq_item.setForeground(QBrush(QColor(139, 90, 0)))
+                freq_item.setForeground(QBrush(QColor(255, 204, 0)))
             elif freq >= 100:
-                freq_item.setForeground(QBrush(QColor(85, 107, 47)))
+                freq_item.setForeground(QBrush(QColor(52, 199, 36)))
             else:
-                freq_item.setForeground(QBrush(QColor(128, 128, 128)))
+                freq_item.setForeground(QBrush(QColor(142, 142, 147)))
 
             self.setItem(i, 2, freq_item)
 
         self.setSortingEnabled(True)
 
     def get_frequency_color(self, freq: int) -> QColor:
-        """Получение цвета фона в зависимости от частотности"""
         if freq >= 100000:
             return QColor(255, 235, 235)
         elif freq >= 10000:
@@ -688,12 +737,10 @@ class MainPhraseTable(QTableWidget):
             return QColor(255, 255, 255)
 
     def set_stop_words(self, stop_words: Set[str]):
-        """Установка стоп-слов"""
         self.stop_words = stop_words
         self.update_table(self.current_data, save_history=False)
 
     def set_search(self, text: str, only_matches: bool):
-        """Установка параметров поиска"""
         self.search_text = text
         self.search_only_matches = only_matches
         self.current_search_index = 0
@@ -704,7 +751,6 @@ class MainPhraseTable(QTableWidget):
             self.selectRow(self.search_results[0])
 
     def next_search_result(self):
-        """Следующий результат поиска"""
         if self.search_results:
             self.current_search_index = (self.current_search_index + 1) % len(self.search_results)
             row = self.search_results[self.current_search_index]
@@ -714,7 +760,6 @@ class MainPhraseTable(QTableWidget):
         return 0, 0
 
     def prev_search_result(self):
-        """Предыдущий результат поиска"""
         if self.search_results:
             self.current_search_index = (self.current_search_index - 1) % len(self.search_results)
             row = self.search_results[self.current_search_index]
@@ -724,11 +769,9 @@ class MainPhraseTable(QTableWidget):
         return 0, 0
 
     def get_current_data(self) -> List[Tuple[str, int]]:
-        """Получение текущих данных"""
         return self.current_data.copy()
 
     def copy_selected(self):
-        """Копирование выбранных фраз"""
         selected = []
         for row in range(self.rowCount()):
             checkbox_item = self.item(row, 0)
@@ -784,7 +827,6 @@ class MainPhraseTable(QTableWidget):
 
 
 class FileLoader(QThread):
-    """Поток для загрузки файлов"""
     progress = pyqtSignal(int)
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
@@ -829,7 +871,7 @@ class FileLoader(QThread):
 
 
 class StopWordsWidget(QWidget):
-    """Элегантный виджет стоп-слов"""
+    """Виджет стоп-слов в стиле macOS"""
 
     stop_words_changed = pyqtSignal(set)
 
@@ -840,10 +882,12 @@ class StopWordsWidget(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         header = QLabel("Стоп-слова")
-        header.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
-        header.setStyleSheet("color: #2c2c2c;")
+        header.setFont(QFont("-apple-system", 15, QFont.Weight.Bold))
+        header.setStyleSheet("color: #000000;")
         layout.addWidget(header)
 
         self.input_field = QLineEdit()
@@ -851,14 +895,14 @@ class StopWordsWidget(QWidget):
         self.input_field.returnPressed.connect(self.add_stop_word)
         self.input_field.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                border: 1px solid #d0d0d0;
-                border-radius: 8px;
+                padding: 6px;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
                 background-color: #ffffff;
-                font-family: 'Georgia', serif;
+                font-size: 13px;
             }
             QLineEdit:focus {
-                border: 1px solid #8B4513;
+                border: 1px solid #007aff;
             }
         """)
         layout.addWidget(self.input_field)
@@ -867,42 +911,29 @@ class StopWordsWidget(QWidget):
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background-color: #ffffff;
-                border: 1px solid #d0d0d0;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Georgia', serif;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 13px;
             }
             QListWidget::item {
-                padding: 5px;
+                padding: 4px;
             }
             QListWidget::item:selected {
-                background-color: #f5e6d3;
+                background-color: #e5e5ea;
             }
         """)
         layout.addWidget(self.list_widget)
 
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
 
-        self.remove_btn = QPushButton("Удалить")
+        self.remove_btn = ModernButton("Удалить")
         self.remove_btn.clicked.connect(self.remove_stop_word)
-        self.remove_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #8B4513;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 16px;
-                font-family: 'Georgia', serif;
-            }
-            QPushButton:hover {
-                background-color: #A0522D;
-            }
-        """)
         btn_layout.addWidget(self.remove_btn)
 
-        self.clear_btn = QPushButton("Очистить")
+        self.clear_btn = ModernButton("Очистить")
         self.clear_btn.clicked.connect(self.clear_stop_words)
-        self.clear_btn.setStyleSheet(self.remove_btn.styleSheet())
         btn_layout.addWidget(self.clear_btn)
 
         layout.addLayout(btn_layout)
@@ -932,7 +963,7 @@ class StopWordsWidget(QWidget):
 
 
 class GroupingWidget(QWidget):
-    """Элегантный виджет группировки"""
+    """Виджет группировки в стиле macOS"""
 
     def __init__(self):
         super().__init__()
@@ -941,31 +972,20 @@ class GroupingWidget(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         header_layout = QHBoxLayout()
 
         header = QLabel("Группировка")
-        header.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
-        header.setStyleSheet("color: #2c2c2c;")
+        header.setFont(QFont("-apple-system", 15, QFont.Weight.Bold))
+        header.setStyleSheet("color: #000000;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
 
-        self.export_btn = QPushButton("Экспорт")
+        self.export_btn = ModernButton("Экспорт")
         self.export_btn.clicked.connect(self.export_groups)
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #8B4513;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 16px;
-                font-family: 'Georgia', serif;
-            }
-            QPushButton:hover {
-                background-color: #A0522D;
-            }
-        """)
         header_layout.addWidget(self.export_btn)
 
         layout.addLayout(header_layout)
@@ -975,23 +995,23 @@ class GroupingWidget(QWidget):
         self.tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #ffffff;
-                border: 1px solid #d0d0d0;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Georgia', serif;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 13px;
             }
             QTreeWidget::item {
-                padding: 3px;
+                padding: 4px;
             }
             QTreeWidget::item:selected {
-                background-color: #f5e6d3;
+                background-color: #e5e5ea;
             }
             QHeaderView::section {
-                background-color: #f8f8f8;
-                color: #2c2c2c;
-                padding: 8px;
+                background-color: #f2f2f7;
+                color: #000000;
+                padding: 6px;
                 border: none;
-                border-bottom: 1px solid #8B4513;
+                border-bottom: 1px solid #c7c7cc;
                 font-weight: 600;
             }
         """)
@@ -1007,8 +1027,8 @@ class GroupingWidget(QWidget):
 
         for group_name, group_phrases in self.groups.items():
             group_item = QTreeWidgetItem(self.tree)
-            group_item.setText(0, f"📁 {group_name} ({len(group_phrases)})")
-            group_item.setExpanded(False)
+            group_item.setText(0, f"{group_name} ({len(group_phrases)})")
+            group_item.setExpanded(True)
 
             for phrase, freq in group_phrases:
                 phrase_item = QTreeWidgetItem(group_item)
@@ -1016,13 +1036,13 @@ class GroupingWidget(QWidget):
                 phrase_item.setText(1, str(freq))
 
                 if freq >= 100000:
-                    phrase_item.setForeground(1, QBrush(QColor(139, 0, 0)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 59, 48)))
                 elif freq >= 10000:
-                    phrase_item.setForeground(1, QBrush(QColor(184, 134, 11)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 149, 0)))
                 elif freq >= 1000:
-                    phrase_item.setForeground(1, QBrush(QColor(139, 90, 0)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 204, 0)))
                 elif freq >= 100:
-                    phrase_item.setForeground(1, QBrush(QColor(85, 107, 47)))
+                    phrase_item.setForeground(1, QBrush(QColor(52, 199, 36)))
 
     def export_groups(self):
         if not self.groups:
@@ -1050,82 +1070,66 @@ class GroupingWidget(QWidget):
 
 
 class FoldersWidget(QWidget):
-    """Виджет для управления папками"""
+    """Виджет для управления папками в стиле macOS"""
 
     def __init__(self):
         super().__init__()
-        self.folders = {}  # Словарь папок
+        self.folders = {}
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
-        # Заголовок и кнопки
         header_layout = QHBoxLayout()
 
         header = QLabel("Папки")
-        header.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
-        header.setStyleSheet("color: #2c2c2c;")
+        header.setFont(QFont("-apple-system", 15, QFont.Weight.Bold))
+        header.setStyleSheet("color: #000000;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
 
-        self.new_folder_btn = QPushButton("Новая папка")
+        self.new_folder_btn = ModernButton("Новая папка")
         self.new_folder_btn.clicked.connect(self.create_folder)
-        self.new_folder_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #8B4513;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 16px;
-                font-family: 'Georgia', serif;
-            }
-            QPushButton:hover {
-                background-color: #A0522D;
-            }
-        """)
         header_layout.addWidget(self.new_folder_btn)
 
-        self.export_btn = QPushButton("Экспорт")
+        self.export_btn = ModernButton("Экспорт")
         self.export_btn.clicked.connect(self.export_folders)
-        self.export_btn.setStyleSheet(self.new_folder_btn.styleSheet())
         header_layout.addWidget(self.export_btn)
 
         layout.addLayout(header_layout)
 
-        # Дерево папок
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Папка / Фраза", "Частотность", ""])
+        self.tree.setHeaderLabels(["Папка / Фраза", "Частотность"])
         self.tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #ffffff;
-                border: 1px solid #d0d0d0;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Georgia', serif;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 13px;
             }
             QTreeWidget::item {
-                padding: 3px;
+                padding: 4px;
             }
             QTreeWidget::item:selected {
-                background-color: #f5e6d3;
+                background-color: #e5e5ea;
             }
             QHeaderView::section {
-                background-color: #f8f8f8;
-                color: #2c2c2c;
-                padding: 8px;
+                background-color: #f2f2f7;
+                color: #000000;
+                padding: 6px;
                 border: none;
-                border-bottom: 1px solid #8B4513;
+                border-bottom: 1px solid #c7c7cc;
                 font-weight: 600;
             }
         """)
 
-        # Контекстное меню для дерева
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.show_context_menu)
 
-        # Включаем перетаскивание
         self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.tree.setDefaultDropAction(Qt.DropAction.MoveAction)
 
@@ -1134,7 +1138,6 @@ class FoldersWidget(QWidget):
         self.setLayout(layout)
 
     def create_folder(self):
-        """Создание новой папки"""
         name, ok = QInputDialog.getText(self, "Новая папка", "Введите название папки:")
         if ok and name:
             if name not in self.folders:
@@ -1144,69 +1147,70 @@ class FoldersWidget(QWidget):
                 QMessageBox.warning(self, "Ошибка", "Папка с таким именем уже существует")
 
     def delete_folder(self, folder_name: str):
-        """Удаление папки"""
         reply = QMessageBox.question(
             self,
             "Подтверждение",
-            f"Вы действительно хотите удалить папку '{folder_name}'?",
+            f"Удалить папку '{folder_name}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-
         if reply == QMessageBox.StandardButton.Yes:
             del self.folders[folder_name]
             self.update_tree()
 
     def show_context_menu(self, position):
-        """Показ контекстного меню"""
         item = self.tree.itemAt(position)
         if not item:
             return
 
-        # Проверяем, папка это или фраза
         parent = item.parent()
-        if parent is None:  # Это папка
-            folder_name = item.text(0).replace("📁 ", "")
-            if folder_name in self.folders:
-                menu = QMenu(self)
-                menu.setStyleSheet("""
-                    QMenu {
-                        background-color: #ffffff;
-                        border: 1px solid #d0d0d0;
-                        border-radius: 8px;
-                        padding: 8px;
-                    }
-                    QMenu::item {
-                        padding: 8px 20px;
-                    }
-                    QMenu::item:selected {
-                        background-color: #f5e6d3;
-                    }
-                """)
+        if parent is None:
+            folder_name = item.text(0).split(" (")[0]
+            menu = QMenu(self)
+            menu.setStyleSheet("""
+                QMenu {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c7c7cc;
+                    border-radius: 8px;
+                    padding: 5px;
+                    font-size: 13px;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                    border-radius: 4px;
+                }
+                QMenu::item:selected {
+                    background-color: #e5e5ea;
+                }
+            """)
 
-                delete_action = menu.addAction("Удалить папку")
-                delete_action.triggered.connect(lambda: self.delete_folder(folder_name))
+            delete_action = menu.addAction("Удалить папку")
+            delete_action.triggered.connect(lambda: self.delete_folder(folder_name))
 
-                clear_action = menu.addAction("Очистить папку")
-                clear_action.triggered.connect(lambda: self.clear_folder(folder_name))
+            clear_action = menu.addAction("Очистить папку")
+            clear_action.triggered.connect(lambda: self.clear_folder(folder_name))
 
-                menu.exec(self.tree.mapToGlobal(position))
-        else:  # Это фраза
-            folder_name = parent.text(0).replace("📁 ", "")
+            menu.exec(self.tree.mapToGlobal(position))
+        else:
+            folder_name = parent.text(0).split(" (")[0]
             phrase = item.text(0)
 
             menu = QMenu(self)
             menu.setStyleSheet("""
                 QMenu {
                     background-color: #ffffff;
-                    border: 1px solid #d0d0d0;
+                    color: #000000;
+                    border: 1px solid #c7c7cc;
                     border-radius: 8px;
-                    padding: 8px;
+                    padding: 5px;
+                    font-size: 13px;
                 }
                 QMenu::item {
-                    padding: 8px 20px;
+                    padding: 6px 20px;
+                    border-radius: 4px;
                 }
                 QMenu::item:selected {
-                    background-color: #f5e6d3;
+                    background-color: #e5e5ea;
                 }
             """)
 
@@ -1216,33 +1220,28 @@ class FoldersWidget(QWidget):
             menu.exec(self.tree.mapToGlobal(position))
 
     def clear_folder(self, folder_name: str):
-        """Очистка папки"""
         if folder_name in self.folders:
             self.folders[folder_name].clear()
             self.update_tree()
 
     def remove_from_folder(self, folder_name: str, phrase: str):
-        """Удаление фразы из папки"""
         if folder_name in self.folders:
             self.folders[folder_name].remove_phrase(phrase)
             self.update_tree()
 
     def add_phrases_to_folder(self, data: List[Tuple[str, str, int]]):
-        """Добавление фраз в папку"""
         for folder_name, phrase, freq in data:
             if folder_name in self.folders:
                 self.folders[folder_name].add_phrase(phrase, freq)
         self.update_tree()
 
     def update_tree(self):
-        """Обновление дерева папок"""
         self.tree.clear()
 
         for folder_name, folder in self.folders.items():
             folder_item = QTreeWidgetItem(self.tree)
-            folder_item.setText(0, f"📁 {folder_name}")
-            folder_item.setText(1, f"({len(folder.phrases)} фраз)")
-            folder_item.setExpanded(False)
+            folder_item.setText(0, f"{folder_name} ({len(folder.phrases)})")
+            folder_item.setExpanded(True)
 
             for phrase, freq in folder.phrases:
                 phrase_item = QTreeWidgetItem(folder_item)
@@ -1250,16 +1249,15 @@ class FoldersWidget(QWidget):
                 phrase_item.setText(1, str(freq))
 
                 if freq >= 100000:
-                    phrase_item.setForeground(1, QBrush(QColor(139, 0, 0)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 59, 48)))
                 elif freq >= 10000:
-                    phrase_item.setForeground(1, QBrush(QColor(184, 134, 11)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 149, 0)))
                 elif freq >= 1000:
-                    phrase_item.setForeground(1, QBrush(QColor(139, 90, 0)))
+                    phrase_item.setForeground(1, QBrush(QColor(255, 204, 0)))
                 elif freq >= 100:
-                    phrase_item.setForeground(1, QBrush(QColor(85, 107, 47)))
+                    phrase_item.setForeground(1, QBrush(QColor(52, 199, 36)))
 
     def export_folders(self):
-        """Экспорт папок в Excel"""
         if not self.folders:
             QMessageBox.warning(self, "Предупреждение", "Нет папок для экспорта")
             return
@@ -1285,12 +1283,11 @@ class FoldersWidget(QWidget):
                 QMessageBox.critical(self, "Ошибка", f"Не удалось экспортировать: {str(e)}")
 
     def get_folders(self) -> Dict[str, Folder]:
-        """Получение словаря папок"""
         return self.folders
 
 
 class MainWindow(QMainWindow):
-    """Главное окно приложения"""
+    """Главное окно приложения в стиле macOS"""
 
     def __init__(self):
         super().__init__()
@@ -1300,89 +1297,92 @@ class MainWindow(QMainWindow):
         self.setup_style()
 
     def setup_ui(self):
-        """Настройка интерфейса"""
-        self.setWindowTitle("PhraseTools - Professional SEO Management")
+        self.setWindowTitle("KeyPhrase Manager Pro - Modern SEO Tool")
         self.setGeometry(100, 100, 1400, 900)
 
-        # Центральный виджет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Главный layout
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         central_widget.setLayout(main_layout)
 
-        # Панель инструментов
-        toolbar_layout = QHBoxLayout()
-
-        self.load_btn = QPushButton("Загрузить")
-        self.load_btn.clicked.connect(self.load_files)
-        self.load_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #8B4513;
-                color: white;
-                border: none;
-                padding: 10px 24px;
-                border-radius: 20px;
-                font-family: 'Georgia', serif;
-                font-size: 14px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #A0522D;
+        toolbar_widget = QWidget()
+        toolbar_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f2f2f7;
+                border-bottom: 1px solid #c7c7cc;
             }
         """)
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setContentsMargins(10, 5, 10, 5)
+        toolbar_layout.setSpacing(8)
+
+        self.load_btn = ModernButton("Загрузить")
+        self.load_btn.clicked.connect(self.load_files)
         toolbar_layout.addWidget(self.load_btn)
 
-        self.save_btn = QPushButton("Сохранить")
+        self.save_btn = ModernButton("Сохранить")
         self.save_btn.clicked.connect(self.save_file)
-        self.save_btn.setStyleSheet(self.load_btn.styleSheet())
         toolbar_layout.addWidget(self.save_btn)
+
+        self.add_btn = ModernButton("Добавить")
+        self.add_btn.clicked.connect(self.add_phrase)
+        toolbar_layout.addWidget(self.add_btn)
 
         toolbar_layout.addStretch()
 
+        counter_widget = QWidget()
+        counter_widget.setStyleSheet("""
+            QWidget {
+                background: transparent;
+                padding: 0 10px;
+            }
+        """)
+        counter_layout = QHBoxLayout()
+        counter_layout.setContentsMargins(0, 0, 0, 0)
+        counter_layout.setSpacing(5)
+
         self.phrase_count_label = QLabel("Фраз: 0")
-        self.phrase_count_label.setFont(QFont("Georgia", 13))
-        self.phrase_count_label.setStyleSheet("color: #2c2c2c;")
-        toolbar_layout.addWidget(self.phrase_count_label)
+        self.phrase_count_label.setFont(QFont("-apple-system", 12))
+        self.phrase_count_label.setStyleSheet("color: #000000;")
+        counter_layout.addWidget(self.phrase_count_label)
 
         self.filtered_count_label = QLabel("")
-        self.filtered_count_label.setFont(QFont("Georgia", 13))
-        self.filtered_count_label.setStyleSheet("color: #8B4513;")
-        toolbar_layout.addWidget(self.filtered_count_label)
+        self.filtered_count_label.setFont(QFont("-apple-system", 12))
+        self.filtered_count_label.setStyleSheet("color: #8e8e93;")
+        counter_layout.addWidget(self.filtered_count_label)
 
-        main_layout.addLayout(toolbar_layout)
+        counter_widget.setLayout(counter_layout)
+        toolbar_layout.addWidget(counter_widget)
 
-        # Панель поиска
+        toolbar_widget.setLayout(toolbar_layout)
+        toolbar_widget.setMaximumHeight(40)
+        main_layout.addWidget(toolbar_widget)
+
         self.search_widget = SearchWidget()
         self.search_widget.search_changed.connect(self.on_search_changed)
         self.search_widget.prev_btn.clicked.connect(self.prev_search)
         self.search_widget.next_btn.clicked.connect(self.next_search)
         main_layout.addWidget(self.search_widget)
 
-        # Разделитель для основного контента (с изменяемыми размерами)
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setHandleWidth(8)
+        splitter.setHandleWidth(1)
         splitter.setStyleSheet("""
             QSplitter::handle {
-                background-color: #e0e0e0;
-                border-radius: 4px;
-            }
-            QSplitter::handle:hover {
-                background-color: #8B4513;
+                background-color: #c7c7cc;
             }
         """)
 
-        # Левая панель - основная таблица
         left_panel = QWidget()
         left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(8)
 
         editor_label = QLabel("Фразы")
-        editor_label.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
-        editor_label.setStyleSheet("color: #2c2c2c; padding: 5px;")
+        editor_label.setFont(QFont("-apple-system", 13, QFont.Weight.Bold))
+        editor_label.setStyleSheet("color: #000000;")
         left_layout.addWidget(editor_label)
 
         self.main_table = MainPhraseTable()
@@ -1392,64 +1392,56 @@ class MainWindow(QMainWindow):
         left_panel.setLayout(left_layout)
         splitter.addWidget(left_panel)
 
-        # Правая панель - вкладки
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 1px solid #d0d0d0;
-                background-color: #fafafa;
+                border: 1px solid #c7c7cc;
+                background-color: #ffffff;
                 border-radius: 8px;
             }
             QTabBar::tab {
-                background-color: #f0f0f0;
-                color: #2c2c2c;
-                padding: 8px 16px;
-                margin-right: 2px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                font-family: 'Georgia', serif;
+                background-color: #f2f2f7;
+                color: #000000;
+                padding: 6px 12px;
+                margin-right: 1px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
             }
             QTabBar::tab:selected {
                 background-color: #ffffff;
-                border-bottom: 2px solid #8B4513;
+                border-bottom: 1px solid #ffffff;
             }
         """)
 
-        # Вкладка стоп-слов
         self.stop_words_widget = StopWordsWidget()
         self.stop_words_widget.stop_words_changed.connect(self.on_stop_words_changed)
         self.tabs.addTab(self.stop_words_widget, "Стоп-слова")
 
-        # Вкладка группировки
         self.grouping_widget = GroupingWidget()
         self.tabs.addTab(self.grouping_widget, "Группировка")
 
-        # Вкладка папок
         self.folders_widget = FoldersWidget()
         self.tabs.addTab(self.folders_widget, "Папки")
 
         splitter.addWidget(self.tabs)
 
-        # Устанавливаем начальные размеры (70% для таблицы, 30% для табов)
         splitter.setSizes([980, 420])
 
         main_layout.addWidget(splitter)
 
-        # Статус бар
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet("""
             QStatusBar {
-                background-color: #f8f8f8;
-                color: #4a4a4a;
-                border-top: 1px solid #e0e0e0;
-                font-family: 'Georgia', serif;
+                background-color: #f2f2f7;
+                color: #8e8e93;
+                border-top: 1px solid #c7c7cc;
+                font-size: 12px;
             }
         """)
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Готов к работе")
 
     def setup_shortcuts(self):
-        """Настройка горячих клавиш"""
         undo_shortcut = QShortcut(QKeySequence("Cmd+Z"), self)
         undo_shortcut.activated.connect(self.main_table.undo)
 
@@ -1460,20 +1452,28 @@ class MainWindow(QMainWindow):
         search_shortcut.activated.connect(lambda: self.search_widget.search_input.setFocus())
 
     def setup_style(self):
-        """Настройка элегантного стиля"""
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f5f5f5;
+                background-color: #f2f2f7;
             }
         """)
 
+    def add_phrase(self):
+        """Добавление новой фразы"""
+        phrase, ok = QInputDialog.getText(self, "Добавить фразу", "Введите фразу:")
+        if ok and phrase:
+            self.main_table.save_state()
+            self.main_table.current_data.append((phrase.strip(), 0))
+            self.main_table.update_table(self.main_table.current_data, save_history=False)
+            self.update_phrase_count()
+            current_data = self.main_table.get_current_data()
+            self.grouping_widget.update_groups(current_data)
+
     def on_phrases_to_folder(self, data: List[Tuple[str, str, int]]):
-        """Обработка добавления фраз в папку"""
         self.folders_widget.add_phrases_to_folder(data)
         self.main_table.set_folders(self.folders_widget.get_folders())
 
     def load_files(self):
-        """Загрузка файлов"""
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Выберите файлы",
@@ -1486,10 +1486,9 @@ class MainWindow(QMainWindow):
             self.loader.finished.connect(self.on_files_loaded)
             self.loader.error.connect(self.on_load_error)
             self.loader.start()
-            self.status_bar.showMessage("Загрузка файлов...")
+            self.status_bar.showMessage("Загрузка...")
 
     def on_files_loaded(self, phrases: List[Phrase]):
-        """Обработка загруженных файлов"""
         self.phrases_data.extend(phrases)
 
         self.main_table.load_phrases(self.phrases_data)
@@ -1498,18 +1497,15 @@ class MainWindow(QMainWindow):
         data = [(p.text, p.frequency) for p in self.phrases_data]
         self.grouping_widget.update_groups(data)
 
-        # Передаем папки в таблицу
         self.main_table.set_folders(self.folders_widget.get_folders())
 
         self.status_bar.showMessage(f"Загружено {len(phrases)} фраз")
 
     def on_load_error(self, error: str):
-        """Обработка ошибок загрузки"""
         QMessageBox.warning(self, "Ошибка", error)
-        self.status_bar.showMessage("Ошибка при загрузке")
+        self.status_bar.showMessage("Ошибка загрузки")
 
     def on_stop_words_changed(self, stop_words: Set[str]):
-        """Обработка изменения стоп-слов"""
         self.main_table.set_stop_words(stop_words)
         self.update_phrase_count()
 
@@ -1517,7 +1513,6 @@ class MainWindow(QMainWindow):
         self.grouping_widget.update_groups(current_data)
 
     def on_search_changed(self, text: str, only_matches: bool):
-        """Обработка изменения поиска"""
         self.main_table.set_search(text, only_matches)
 
         if text:
@@ -1528,17 +1523,14 @@ class MainWindow(QMainWindow):
                 self.search_widget.update_results(0, 0)
 
     def next_search(self):
-        """Следующий результат поиска"""
         current, total = self.main_table.next_search_result()
         self.search_widget.update_results(current, total)
 
     def prev_search(self):
-        """Предыдущий результат поиска"""
         current, total = self.main_table.prev_search_result()
         self.search_widget.update_results(current, total)
 
     def update_phrase_count(self):
-        """Обновление счетчика фраз"""
         total = len(self.main_table.current_data)
         self.phrase_count_label.setText(f"Фраз: {total}")
 
@@ -1549,7 +1541,6 @@ class MainWindow(QMainWindow):
             self.filtered_count_label.setText("")
 
     def save_file(self):
-        """Сохранение файла"""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Сохранить файл",
@@ -1569,20 +1560,18 @@ class MainWindow(QMainWindow):
                     df = pd.DataFrame(data, columns=['Фраза', 'Частотность'])
                     df.to_excel(file_path, index=False)
 
-                self.status_bar.showMessage(f"Файл сохранен: {Path(file_path).name}")
+                self.status_bar.showMessage(f"Сохранено: {Path(file_path).name}")
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {str(e)}")
 
 
 def main():
-    """Точка входа в приложение"""
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
-    # Элегантная палитра в стиле итальянской классики
     palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window, QColor(245, 245, 245))
-    palette.setColor(QPalette.ColorRole.WindowText, QColor(44, 44, 44))
+    palette.setColor(QPalette.ColorRole.Window, QColor(242, 242, 247))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(0, 0, 0))
     app.setPalette(palette)
 
     window = MainWindow()
