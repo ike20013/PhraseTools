@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-KeyPhrase Manager Pro - Modern SEO Tool
+PhraseTools - Modern SEO Tool
 Автор: Assistant
 Python 3.11+ / macOS
 """
@@ -31,7 +31,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QE
 from PyQt6.QtGui import (
     QAction, QFont, QPalette, QColor, QBrush, QLinearGradient,
     QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QPainter,
-    QDrag
+    QDrag, QIcon
 )
 
 
@@ -245,6 +245,30 @@ class ModernButton(QPushButton):
                 border-radius: 8px;
                 font-weight: 600;
                 font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #f2f2f7;
+            }
+            QPushButton:pressed {
+                background-color: #e5e5ea;
+            }
+        """)
+
+
+class AddButton(QPushButton):
+    """Кнопка добавления в виде плюсика"""
+
+    def __init__(self, parent=None):
+        super().__init__("+", parent)
+        self.setFixedSize(24, 24)
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #007aff;
+                border: 1px solid #c7c7cc;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #f2f2f7;
@@ -483,8 +507,7 @@ class MainPhraseTable(QTableWidget):
             }
         """)
 
-        self.setAlternatingRowColors(True)
-        self.setAlternatingRowColors(False)  # Отключаем для macOS стиля
+        self.setAlternatingRowColors(False)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.verticalHeader().setVisible(False)
 
@@ -900,6 +923,7 @@ class StopWordsWidget(QWidget):
                 border-radius: 6px;
                 background-color: #ffffff;
                 font-size: 13px;
+                color: #000000;
             }
             QLineEdit:focus {
                 border: 1px solid #007aff;
@@ -915,12 +939,14 @@ class StopWordsWidget(QWidget):
                 border-radius: 6px;
                 padding: 5px;
                 font-size: 13px;
+                color: #000000;
             }
             QListWidget::item {
                 padding: 4px;
             }
             QListWidget::item:selected {
                 background-color: #e5e5ea;
+                color: #000000;
             }
         """)
         layout.addWidget(self.list_widget)
@@ -999,12 +1025,14 @@ class GroupingWidget(QWidget):
                 border-radius: 6px;
                 padding: 5px;
                 font-size: 13px;
+                color: #000000;
             }
             QTreeWidget::item {
                 padding: 4px;
             }
             QTreeWidget::item:selected {
                 background-color: #e5e5ea;
+                color: #000000;
             }
             QHeaderView::section {
                 background-color: #f2f2f7;
@@ -1110,12 +1138,14 @@ class FoldersWidget(QWidget):
                 border-radius: 6px;
                 padding: 5px;
                 font-size: 13px;
+                color: #000000;
             }
             QTreeWidget::item {
                 padding: 4px;
             }
             QTreeWidget::item:selected {
                 background-color: #e5e5ea;
+                color: #000000;
             }
             QHeaderView::section {
                 background-color: #f2f2f7;
@@ -1297,7 +1327,7 @@ class MainWindow(QMainWindow):
         self.setup_style()
 
     def setup_ui(self):
-        self.setWindowTitle("KeyPhrase Manager Pro - Modern SEO Tool")
+        self.setWindowTitle("PhraseTools - Modern SEO Tool")
         self.setGeometry(100, 100, 1400, 900)
 
         central_widget = QWidget()
@@ -1326,10 +1356,6 @@ class MainWindow(QMainWindow):
         self.save_btn = ModernButton("Сохранить")
         self.save_btn.clicked.connect(self.save_file)
         toolbar_layout.addWidget(self.save_btn)
-
-        self.add_btn = ModernButton("Добавить")
-        self.add_btn.clicked.connect(self.add_phrase)
-        toolbar_layout.addWidget(self.add_btn)
 
         toolbar_layout.addStretch()
 
@@ -1380,10 +1406,20 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(10, 10, 10, 10)
         left_layout.setSpacing(8)
 
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(5)
+
         editor_label = QLabel("Фразы")
         editor_label.setFont(QFont("-apple-system", 13, QFont.Weight.Bold))
         editor_label.setStyleSheet("color: #000000;")
-        left_layout.addWidget(editor_label)
+        header_layout.addWidget(editor_label)
+
+        self.add_btn = AddButton()
+        self.add_btn.clicked.connect(self.add_phrase)
+        header_layout.addWidget(self.add_btn)
+
+        header_layout.addStretch()
+        left_layout.addLayout(header_layout)
 
         self.main_table = MainPhraseTable()
         self.main_table.phrases_to_folder.connect(self.on_phrases_to_folder)
@@ -1442,13 +1478,13 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Готов к работе")
 
     def setup_shortcuts(self):
-        undo_shortcut = QShortcut(QKeySequence("Cmd+Z"), self)
+        undo_shortcut = QShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_Z), self)
         undo_shortcut.activated.connect(self.main_table.undo)
 
-        redo_shortcut = QShortcut(QKeySequence("Cmd+Shift+Z"), self)
+        redo_shortcut = QShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_Z), self)
         redo_shortcut.activated.connect(self.main_table.redo)
 
-        search_shortcut = QShortcut(QKeySequence("Cmd+F"), self)
+        search_shortcut = QShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_F), self)
         search_shortcut.activated.connect(lambda: self.search_widget.search_input.setFocus())
 
     def setup_style(self):
