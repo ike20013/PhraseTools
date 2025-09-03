@@ -445,7 +445,6 @@ class MainPhraseTable(QTableWidget):
         self.current_data = []
         self.search_text = ""
         self.search_only_matches = False
-        self.search_results = []
         self.current_search_index = 0
         self.folders = {}  # Словарь папок
         self.setup_ui()
@@ -711,8 +710,6 @@ class MainPhraseTable(QTableWidget):
         self.setSortingEnabled(False)
         self.setRowCount(len(display_data))
 
-        self.search_results = []
-
         for i, (phrase, freq) in enumerate(display_data):
             checkbox = CheckboxTableWidgetItem()
             checkbox.setCheckState(Qt.CheckState.Unchecked)
@@ -722,7 +719,7 @@ class MainPhraseTable(QTableWidget):
 
             if self.search_text and self.search_text.lower() in phrase.lower():
                 phrase_item.setBackground(QBrush(QColor(229, 243, 255)))
-                self.search_results.append(i)
+
             else:
                 color = self.get_frequency_color(freq)
                 phrase_item.setBackground(QBrush(color))
@@ -769,26 +766,39 @@ class MainPhraseTable(QTableWidget):
         self.current_search_index = 0
         self.update_table(self.current_data, save_history=False)
 
-        if self.search_results and not only_matches:
-            self.scrollToItem(self.item(self.search_results[0], 1))
-            self.selectRow(self.search_results[0])
+        if text and not only_matches:
+            rows = self.get_matching_rows()
+            if rows:
+                self.scrollToItem(self.item(rows[0], 1))
+                self.selectRow(rows[0])
+                self.current_search_index = 0
+
+    def get_matching_rows(self):
+        rows = []
+        for row in range(self.rowCount()):
+            phrase_item = self.item(row, 1)
+            if phrase_item and self.search_text.lower() in phrase_item.text().lower():
+                rows.append(row)
+        return rows
 
     def next_search_result(self):
-        if self.search_results:
-            self.current_search_index = (self.current_search_index + 1) % len(self.search_results)
-            row = self.search_results[self.current_search_index]
+        rows = self.get_matching_rows()
+        if rows:
+            self.current_search_index = (self.current_search_index + 1) % len(rows)
+            row = rows[self.current_search_index]
             self.scrollToItem(self.item(row, 1))
             self.selectRow(row)
-            return self.current_search_index + 1, len(self.search_results)
+            return self.current_search_index + 1, len(rows)
         return 0, 0
 
     def prev_search_result(self):
-        if self.search_results:
-            self.current_search_index = (self.current_search_index - 1) % len(self.search_results)
-            row = self.search_results[self.current_search_index]
+        rows = self.get_matching_rows()
+        if rows:
+            self.current_search_index = (self.current_search_index - 1) % len(rows)
+            row = rows[self.current_search_index]
             self.scrollToItem(self.item(row, 1))
             self.selectRow(row)
-            return self.current_search_index + 1, len(self.search_results)
+            return self.current_search_index + 1, len(rows)
         return 0, 0
 
     def get_current_data(self) -> List[Tuple[str, int]]:
@@ -1552,7 +1562,8 @@ class MainWindow(QMainWindow):
         self.main_table.set_search(text, only_matches)
 
         if text:
-            total = len(self.main_table.search_results)
+            rows = self.main_table.get_matching_rows()
+            total = len(rows)
             if total > 0:
                 self.search_widget.update_results(1, total)
             else:
@@ -1586,14 +1597,17 @@ class MainWindow(QMainWindow):
 
         if file_path:
             try:
-                data = self.main_table.get_current_data()
+                filtered_data = self.main_table.processor.filter_by_stop_words(
+                    self.main_table.current_data, self.main_table.stop_words
+                )
+                phrases = [phrase for phrase, _ in filtered_data]
 
                 if file_path.endswith('.txt'):
                     with open(file_path, 'w', encoding='utf-8') as f:
-                        for phrase, freq in data:
-                            f.write(f"{phrase}\t{freq}\n")
+                        for phrase in phrases:
+                            f.write(f"{phrase}\n")
                 elif file_path.endswith('.xlsx'):
-                    df = pd.DataFrame(data, columns=['Фраза', 'Частотность'])
+                    df = pd.DataFrame({'Фраза': phrases})
                     df.to_excel(file_path, index=False)
 
                 self.status_bar.showMessage(f"Сохранено: {Path(file_path).name}")
