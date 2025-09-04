@@ -13,7 +13,7 @@
 set -euo pipefail
 
 APP_NAME="PhraseTools"
-ENTRY_POINT="main_merged.py"
+ENTRY_POINT="main_merged_qt5.py"
 ICON_PATH="ico.png"
 OUTDIR="dist"
 BUNDLE_ID="com.phrase_tools.app"
