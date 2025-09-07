@@ -166,7 +166,7 @@ fi
 echo "Running PyInstaller..."
 pyinstaller "${PYI_ARGS[@]}" "$ENTRY_POINT"
 
-APP_PATH="dist/${APP_NAME}.app"
+APP_PATH="dist_arm/${APP_NAME}.app"
 PLIST="$APP_PATH/Contents/Info.plist"
 
 if [[ ! -d "$APP_PATH" ]]; then
