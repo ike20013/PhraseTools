@@ -20,10 +20,10 @@ if [ "$(uname -m)" = "arm64" ]; then
   exec arch -x86_64 "$0" "$@"
 fi
 
-APP_NAME="PhraseTools"
+APP_NAME="Phrase Tools"
 ENTRY_POINT="main_merged_qt5.py"
-ICON_PATH="icon_1.jpg"
-OUTDIR="dist_x64"
+ICON_PATH="icon_2.png"
+OUTDIR="dist"
 BUNDLE_ID="com.phrase_tools.app"
 VERSION="1.0.0"
 WINDOWED=1
@@ -216,7 +216,7 @@ fi
 
 pyinstaller "${PYI_ARGS[@]}" "$ENTRY_POINT"
 
-APP_PATH="dist_x64/${APP_NAME}.app"
+APP_PATH="dist/${APP_NAME}.app"
 PLIST="$APP_PATH/Contents/Info.plist"
 
 if [[ ! -d "$APP_PATH" ]]; then
