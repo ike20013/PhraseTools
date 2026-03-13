@@ -15,15 +15,20 @@
 
 set -euo pipefail
 
-# Run under x86_64 if on arm64
-if [ "$(uname -m)" = "arm64" ]; then
-  exec arch -x86_64 "$0" "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYI_CMD=()
+DEFAULT_X86_PY="$SCRIPT_DIR/venv_x86/bin/python"
+
+# Run under x86_64 if on arm64.
+# Guard with a flag to avoid recursive relaunch loops on systems where uname stays arm64 under translation.
+if [[ "$(uname -m)" = "arm64" && "${FORCED_X86_64:-0}" != "1" ]]; then
+  exec env FORCED_X86_64=1 arch -x86_64 "$0" "$@"
 fi
 
 APP_NAME="PhraseTools"
 ENTRY_POINT="main_merged_qt5.py"
-ICON_PATH="icon_1.jpg"
-OUTDIR="dist_x64"
+ICON_PATH="icon_1.png"
+OUTDIR="dist"
 BUNDLE_ID="com.phrase_tools.app"
 VERSION="1.0.0"
 WINDOWED=1
@@ -112,8 +117,15 @@ if [[ ! -f "$ENTRY_POINT" ]]; then
 fi
 
 # Check required tools
-if ! command -v pyinstaller >/dev/null 2>&1; then
-  log_error "pyinstaller not found. Install with: python -m pip install pyinstaller"
+if [[ -x "$DEFAULT_X86_PY" ]]; then
+  PYI_CMD=(arch -x86_64 "$DEFAULT_X86_PY" -m PyInstaller)
+  log_info "Using x86_64 PyInstaller from venv: $DEFAULT_X86_PY"
+elif command -v pyinstaller >/dev/null 2>&1; then
+  PYI_CMD=(pyinstaller)
+  log_warning "venv_x86 not found. Falling back to pyinstaller from PATH."
+  log_warning "If build fails with arch mismatch, create/use venv_x86 and install dependencies there."
+else
+  log_error "PyInstaller not found. Install in venv_x86 or ensure pyinstaller is available in PATH."
   exit 1
 fi
 
@@ -214,9 +226,9 @@ if [[ $VERBOSE -eq 1 ]]; then
   log_verbose "PyInstaller arguments: ${PYI_ARGS[*]}"
 fi
 
-pyinstaller "${PYI_ARGS[@]}" "$ENTRY_POINT"
+"${PYI_CMD[@]}" "${PYI_ARGS[@]}" "$ENTRY_POINT"
 
-APP_PATH="dist_x64/${APP_NAME}.app"
+APP_PATH="dist/${APP_NAME}.app"
 PLIST="$APP_PATH/Contents/Info.plist"
 
 if [[ ! -d "$APP_PATH" ]]; then
