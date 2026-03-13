@@ -30,8 +30,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QProgressBar, QStatusBar, QTextEdit,
     QAbstractItemView, QTreeWidget, QTreeWidgetItem,
     QCheckBox, QSpinBox, QGraphicsDropShadowEffect,
-    QListWidgetItem, QInputDialog, QDialog, QAction, QShortcut,
-    QTextEdit, QColorDialog
+    QListWidgetItem, QInputDialog, QDialog, QAction, QShortcut
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QMimeData
 from PyQt5.QtGui import (
@@ -387,10 +386,9 @@ class Phrase:
 class Folder:
     """Модель папки для хранения фраз"""
 
-    def __init__(self, name: str, color: Optional[str] = None):
+    def __init__(self, name: str):
         self.name = name
         self.phrases: List[Tuple[str, int]] = []
-        self.color = color  # hex string, e.g., "#FF0000"
 
     def add_phrase(self, phrase: str, frequency: int):
         """Добавление фразы в папку"""
@@ -520,17 +518,6 @@ class PhraseProcessor:
         result = []
         for phrase, freq in phrases:
             cleaned = re.sub(r'[^\w\s]', ' ', phrase)
-            cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-            if cleaned:
-                result.append((cleaned, freq))
-        return result
-
-    @staticmethod
-    def remove_plus_minus(phrases: List[Tuple[str, int]]) -> List[Tuple[str, int]]:
-        """Удаление спецсимволов + и -"""
-        result = []
-        for phrase, freq in phrases:
-            cleaned = re.sub(r'[\+\-]', '', phrase)
             cleaned = re.sub(r'\s+', ' ', cleaned).strip()
             if cleaned:
                 result.append((cleaned, freq))
@@ -820,7 +807,6 @@ class MainPhraseTable(QTableWidget):
         self.folders = {}  # local folders
         self.global_folders = {}  # global folders
         self.setup_ui()
-        self.itemChanged.connect(self.on_item_changed)
 
     def setup_ui(self):
         """Настройка дизайна таблицы в стиле macOS"""
@@ -883,12 +869,6 @@ class MainPhraseTable(QTableWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().setVisible(False)
 
-    def on_item_changed(self, item):
-        """Обновление счетчика отмеченных фраз при изменении чекбокса"""
-        if item.column() == 0 and isinstance(item, CheckboxTableWidgetItem):
-            if hasattr(self, 'parent_window') and self.parent_window:  # Ссылка на MainWindow для обновления лейбла
-                self.parent_window.update_checked_count()
-
     def contextMenuEvent(self, event):
         """Создание контекстного меню в стиле macOS"""
         menu = QMenu(self)
@@ -922,10 +902,6 @@ class MainPhraseTable(QTableWidget):
             delete_current = menu.addAction("Удалить эту фразу")
             delete_current.triggered.connect(lambda: self.delete_phrase(current_row))
             menu.addSeparator()
-
-        paste_from_clipboard = menu.addAction("Вставить из буфера обмена")
-        paste_from_clipboard.triggered.connect(self.paste_from_clipboard)
-        menu.addSeparator()
 
         if self.folders:
             local_copy_checked = menu.addMenu("Копировать выбранные (галочки) в папку")
@@ -995,9 +971,6 @@ class MainPhraseTable(QTableWidget):
 
         remove_special = menu.addAction("Удалить спецсимволы")
         remove_special.triggered.connect(self.remove_special_chars)
-
-        remove_plus_minus = menu.addAction("Удалить + и -")
-        remove_plus_minus.triggered.connect(self.remove_plus_minus)
 
         remove_long = menu.addAction("Удалить фразы > 7 слов")
         remove_long.triggered.connect(self.remove_long_phrases)
@@ -1095,14 +1068,6 @@ class MainPhraseTable(QTableWidget):
             if checkbox_item:
                 checkbox_item.setCheckState(Qt.Unchecked)
 
-    def get_checked_count(self) -> int:
-        count = 0
-        for row in range(self.rowCount()):
-            checkbox_item = self.item(row, 0)
-            if checkbox_item and checkbox_item.checkState() == Qt.Checked:
-                count += 1
-        return count
-
     def delete_selected(self):
         self.save_state()
         phrases_to_delete = set()
@@ -1140,14 +1105,14 @@ class MainPhraseTable(QTableWidget):
         if self.history is not None:
             self.history.add_state(self.current_data)
 
-    def undo(self) -> Optional[List[Tuple[str, int]]]:
+    def undo(self):
         if self.history is not None:
             state = self.history.undo()
             if state:
                 self.current_data = state
                 self.update_table(self.current_data, save_history=False)
 
-    def redo(self) -> Optional[List[Tuple[str, int]]]:
+    def redo(self):
         if self.history is not None:
             state = self.history.redo()
             if state:
@@ -1306,12 +1271,6 @@ class MainPhraseTable(QTableWidget):
         self.current_data = data
         self.update_table(data, save_history=False)
 
-    def remove_plus_minus(self):
-        self.save_state()
-        data = self.processor.remove_plus_minus(self.current_data)
-        self.current_data = data
-        self.update_table(data, save_history=False)
-
     def remove_long_phrases(self):
         self.save_state()
         data = self.processor.remove_long_phrases(self.current_data, 7)
@@ -1341,28 +1300,6 @@ class MainPhraseTable(QTableWidget):
         data = self.processor.transliterate_phrases(self.current_data, reverse)
         self.current_data = data
         self.update_table(data, save_history=False)
-
-    def paste_from_clipboard(self):
-        clipboard = QApplication.clipboard()
-        text = clipboard.text().strip()
-        if not text:
-            QMessageBox.warning(self, "Предупреждение", "Буфер обмена пуст")
-            return
-
-        phrases = []
-        lines = text.split('\n')
-        for line in lines:
-            parts = line.strip().split('\t')
-            phrase = parts[0].strip()
-            freq = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
-            if phrase:
-                phrases.append((phrase, freq))
-
-        if phrases:
-            self.save_state()
-            self.current_data.extend(phrases)
-            self.current_data = self.processor.remove_duplicates(self.current_data)  # Опционально удаляем дубликаты
-            self.update_table(self.current_data, save_history=False)
 
 
 class FileLoader(QThread):
@@ -1470,10 +1407,6 @@ class StopWordsWidget(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
-        self.load_btn = ModernButton("Загрузить")
-        self.load_btn.clicked.connect(self.load_stop_words_file)
-        btn_layout.addWidget(self.load_btn)
-
         self.remove_btn = ModernButton("Удалить")
         self.remove_btn.clicked.connect(self.remove_stop_word)
         btn_layout.addWidget(self.remove_btn)
@@ -1489,40 +1422,6 @@ class StopWordsWidget(QWidget):
         layout.addLayout(btn_layout)
 
         self.setLayout(layout)
-
-    def load_stop_words_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Загрузить стоп-слова",
-            "",
-            "Supported files (*.txt *.xls *.xlsx);;Text files (*.txt);;Excel files (*.xls *.xlsx)"
-        )
-        if file_path:
-            try:
-                path = Path(file_path)
-                new_words = set()
-
-                if path.suffix.lower() in ['.xls', '.xlsx']:
-                    df = pd.read_excel(file_path)
-                    words = df.iloc[:, 0].astype(str).str.strip().str.lower().tolist()
-                    new_words.update(words)
-
-                elif path.suffix.lower() == '.txt':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        words = [line.strip().lower() for line in lines if line.strip()]
-                        new_words.update(words)
-
-                for word in new_words:
-                    if word and word not in self.stop_words:
-                        self.stop_words.add(word)
-                        self.list_widget.addItem(word)
-
-                self.stop_words_changed.emit(self.stop_words)
-                QMessageBox.information(self, "Успех", f"Загружено {len(new_words)} стоп-слов")
-
-            except Exception as e:
-                QMessageBox.warning(self, "Ошибка", f"Ошибка при загрузке: {str(e)}")
 
     def add_stop_word(self):
         word = self.input_field.text().strip().lower()
@@ -1766,14 +1665,6 @@ class FoldersWidget(QWidget):
             self.update_tree()
             self.folders_changed.emit()
 
-    def change_folder_color(self, folder_name: str):
-        if folder_name in self.folders:
-            color = QColorDialog.getColor()
-            if color.isValid():
-                self.folders[folder_name].color = color.name()
-                self.update_tree()
-                self.folders_changed.emit()
-
     def show_context_menu(self, position):
         items = self.tree.selectedItems()
         if not items:
@@ -1799,9 +1690,6 @@ class FoldersWidget(QWidget):
                     background-color: #e5e5ea;
                 }
             """)
-
-            color_action = menu.addAction("Изменить цвет")
-            color_action.triggered.connect(lambda: self.change_folder_color(folder_name))
 
             delete_action = menu.addAction("Удалить папку")
             delete_action.triggered.connect(lambda: self.delete_folder(folder_name))
@@ -1886,8 +1774,6 @@ class FoldersWidget(QWidget):
         for folder_name, folder in self.folders.items():
             folder_item = QTreeWidgetItem(self.tree)
             folder_item.setText(0, f"{folder_name} ({len(folder.phrases)})")
-            if folder.color:
-                folder_item.setForeground(0, QBrush(QColor(folder.color)))
             folder_item.setExpanded(True)
 
             for phrase, freq in folder.phrases:
@@ -1932,9 +1818,7 @@ class FoldersWidget(QWidget):
                 QMessageBox.critical(self, "Ошибка", f"Не удалось экспортировать: {str(e)}")
 
     def load_folders(self, folders: Dict[str, Folder]):
-        self.folders = {k: Folder(v.name, v.color) for k, v in folders.items()}
-        for k, v in folders.items():
-            self.folders[k].phrases = copy.deepcopy(v.phrases)
+        self.folders = {k: copy.deepcopy(v) for k, v in folders.items()}
         self.update_tree()
 
     def get_folders(self) -> Dict[str, Folder]:
@@ -1959,88 +1843,6 @@ class PhraseTab(QWidget):
         layout.addWidget(self.table)
 
         self.setLayout(layout)
-
-
-class AddPhrasesDialog(QDialog):
-    """Диалог для вставки списка фраз"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Добавить фразы")
-        self.setFixedSize(400, 300)
-        self.setup_ui()
-
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        info_text = QLabel("Вставьте список фраз (каждую с новой строки, опционально с частотностью через таб)")
-        info_text.setWordWrap(True)
-        layout.addWidget(info_text)
-
-        self.text_edit = QTextEdit()
-        self.text_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: #ffffff;
-                border: 1px solid #c7c7cc;
-                border-radius: 6px;
-                padding: 5px;
-                font-size: 13px;
-            }
-        """)
-        layout.addWidget(self.text_edit)
-
-        btn_layout = QHBoxLayout()
-
-        add_btn = QPushButton("Добавить")
-        add_btn.clicked.connect(self.accept)
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #34c759;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #248a3d;
-            }
-        """)
-        btn_layout.addWidget(add_btn)
-
-        cancel_btn = QPushButton("Отмена")
-        cancel_btn.clicked.connect(self.reject)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff3b30;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #c70000;
-            }
-        """)
-        btn_layout.addWidget(cancel_btn)
-
-        layout.addLayout(btn_layout)
-        self.setLayout(layout)
-
-    def get_phrases(self) -> List[Tuple[str, int]]:
-        text = self.text_edit.toPlainText().strip()
-        phrases = []
-        lines = text.split('\n')
-        for line in lines:
-            parts = line.strip().split('\t')
-            phrase = parts[0].strip()
-            freq = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
-            if phrase:
-                phrases.append((phrase, freq))
-        return phrases
 
 
 class MainWindow(QMainWindow):
@@ -2070,10 +1872,6 @@ class MainWindow(QMainWindow):
             lambda selected, is_move: self.on_phrases_back(selected, is_move, False))
         self.general_folders.phrases_back.connect(
             lambda selected, is_move: self.on_phrases_back(selected, is_move, True))
-        # Добавляем ссылки на MainWindow в таблицы для обновления счетчика
-        for i in range(self.phrase_tabs.count()):
-            tab = self.phrase_tabs.widget(i)
-            tab.table.parent_window = self
 
     def setup_ui(self):
         self.setWindowTitle("PhraseTools - Modern SEO Tool [Licensed]")
@@ -2097,10 +1895,6 @@ class MainWindow(QMainWindow):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setContentsMargins(10, 5, 10, 5)
         toolbar_layout.setSpacing(8)
-
-        self.new_list_btn = ModernButton("Новый список")
-        self.new_list_btn.clicked.connect(self.create_empty_list)
-        toolbar_layout.addWidget(self.new_list_btn)
 
         self.load_btn = ModernButton("Загрузить")
         self.load_btn.clicked.connect(self.load_files)
@@ -2152,11 +1946,6 @@ class MainWindow(QMainWindow):
         self.filtered_count_label.setStyleSheet("color: #8e8e93;")
         counter_layout.addWidget(self.filtered_count_label)
 
-        self.checked_count_label = QLabel("Отмечено: 0")
-        self.checked_count_label.setFont(QFont("-apple-system", 12))
-        self.checked_count_label.setStyleSheet("color: #8e8e93;")
-        counter_layout.addWidget(self.checked_count_label)
-
         counter_widget.setLayout(counter_layout)
         toolbar_layout.addWidget(counter_widget)
 
@@ -2186,7 +1975,7 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(editor_label)
 
         self.add_btn = AddButton()
-        self.add_btn.clicked.connect(self.add_phrases_list)
+        self.add_btn.clicked.connect(self.add_phrase)
         header_layout.addWidget(self.add_btn)
 
         header_layout.addStretch()
@@ -2274,16 +2063,6 @@ class MainWindow(QMainWindow):
         search_shortcut.activated.connect(
             lambda: self.get_current_search().search_input.setFocus() if self.get_current_search() else None)
 
-        # New: Copy selected phrases (checked ones) with Ctrl+C
-        copy_shortcut = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_C), self)
-        copy_shortcut.activated.connect(
-            lambda: self.get_current_table().copy_selected() if self.get_current_table() else None)
-
-        # New: Paste phrases from clipboard with Ctrl+V
-        paste_shortcut = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_V), self)
-        paste_shortcut.activated.connect(
-            lambda: self.get_current_table().paste_from_clipboard() if self.get_current_table() else None)
-
     def setup_style(self):
         self.setStyleSheet("""
             QMainWindow {
@@ -2361,11 +2140,9 @@ class MainWindow(QMainWindow):
         current_tab.table.set_stop_words(current_list.stop_words | self.global_stop_words)
         current_tab.table.set_folders(current_list.folders)
         current_tab.table.set_global_folders(self.global_folders)
-        current_tab.table.parent_window = self  # Устанавливаем ссылку
         self.update_grouping_widget()
         self.update_global_grouping()
         self.update_phrase_count()
-        self.update_checked_count()
 
     def get_current_tab(self) -> PhraseTab:
         return self.phrase_tabs.currentWidget()
@@ -2384,53 +2161,15 @@ class MainWindow(QMainWindow):
             return self.phrase_lists[tab.name]
         return None
 
-    def add_phrases_list(self):
+    def add_phrase(self):
         current_tab = self.get_current_tab()
         if current_tab:
-            dialog = AddPhrasesDialog(self)
-            if dialog.exec_() == QDialog.Accepted:
-                phrases = dialog.get_phrases()
-                if phrases:
-                    current_table = current_tab.table
-                    current_table.save_state()
-                    current_table.current_data.extend(phrases)
-                    current_table.current_data = current_table.processor.remove_duplicates(current_table.current_data)  # Опционально
-                    current_table.update_table(current_table.current_data, save_history=False)
-                    self.update_phrase_count()
-                    self.update_grouping_widget()
-                    self.update_global_grouping()
-
-    def add_from_clipboard_to_empty(self):
-        clipboard = QApplication.clipboard()
-        text = clipboard.text().strip()
-        if not text:
-            QMessageBox.warning(self, "Предупреждение", "Буфер обмена пуст")
-            return
-
-        phrases = []
-        lines = text.split('\n')
-        for line in lines:
-            parts = line.strip().split('\t')
-            phrase = parts[0].strip()
-            freq = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
-            if phrase:
-                phrases.append((phrase, freq))
-
-        if phrases:
-            name = "Из буфера"
-            if name in self.phrase_lists:
-                i = 1
-                while f"{name} ({i})" in self.phrase_lists:
-                    i += 1
-                name = f"{name} ({i})"
-            self.create_new_tab(name)
-            current_tab = self.get_current_tab()
-            if current_tab:
-                current_list = self.phrase_lists[name]
-                current_list.phrases = phrases
-                current_tab.table.load_data(phrases)
-                current_tab.table.set_stop_words(current_list.stop_words | self.global_stop_words)
-                self.phrase_tabs.setCurrentWidget(current_tab)
+            phrase, ok = QInputDialog.getText(self, "Добавить фразу", "Введите фразу:")
+            if ok and phrase:
+                current_table = current_tab.table
+                current_table.save_state()
+                current_table.current_data.append((phrase.strip(), 0))
+                current_table.update_table(current_table.current_data, save_history=False)
                 self.update_phrase_count()
                 self.update_grouping_widget()
                 self.update_global_grouping()
@@ -2447,7 +2186,7 @@ class MainWindow(QMainWindow):
                 current_list.folders = self.folders_widget.get_folders()
 
         if is_move:
-            # Remove from current
+            # Remove from current list
             current_table = self.get_current_table()
             if current_table:
                 current_table.save_state()
@@ -2574,12 +2313,6 @@ class MainWindow(QMainWindow):
                 self.filtered_count_label.setText(f"(после фильтра: {filtered})")
             else:
                 self.filtered_count_label.setText("")
-
-    def update_checked_count(self):
-        current_table = self.get_current_table()
-        if current_table:
-            checked = current_table.get_checked_count()
-            self.checked_count_label.setText(f"Отмечено: {checked}")
 
     def update_grouping_widget(self):
         # Синхронизируем текущую вкладку для актуальных данных
@@ -2712,7 +2445,6 @@ class MainWindow(QMainWindow):
                     tab.table.set_stop_words(pl.stop_words | self.global_stop_words)
                     tab.table.set_folders(pl.folders)
                     tab.table.set_global_folders(self.global_folders)
-                    tab.table.parent_window = self  # Устанавливаем ссылку
                 self.general_stop.load_stop_words(self.global_stop_words)
                 self.general_folders.load_folders(self.global_folders)
                 self.update_global_grouping()
@@ -2737,26 +2469,8 @@ class MainWindow(QMainWindow):
         tab.search_widget.next_btn.clicked.connect(lambda: self.next_search(tab))
         tab.table.phrases_to_folder.connect(
             lambda fn, phrases, is_global, is_move: self.on_phrases_to_folder(fn, phrases, is_global, is_move))
-        tab.table.parent_window = self  # Устанавливаем ссылку
 
         self.phrase_tabs.addTab(tab, name)
-        self.phrase_tabs.setCurrentWidget(tab)
-
-    def create_empty_list(self):
-        name, ok = QInputDialog.getText(self, "Новый список", "Введите название списка:")
-        if ok and name:
-            if name in self.phrase_lists:
-                i = 1
-                while f"{name} ({i})" in self.phrase_lists:
-                    i += 1
-                name = f"{name} ({i})"
-            self.create_new_tab(name)
-            self.status_bar.showMessage(f"Создан новый пустой список: {name}")
-            # Дополнительно предлагаем вставить из буфера
-            reply = QMessageBox.question(self, "Вставить из буфера", "Вставить фразы из буфера обмена в этот список?",
-                                         QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                self.add_from_clipboard_to_empty()
 
     def update_current_table_folders(self):
         current_table = self.get_current_table()
