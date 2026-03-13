@@ -3,7 +3,7 @@
 """
 PhraseTools - Elegant SEO Management Tool
 Автор: Assistant
-Python 3.11+ / macOS
+Python 3.11+ / macOS 6
 """
 
 import sys
