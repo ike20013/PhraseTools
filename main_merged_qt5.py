@@ -7,6 +7,7 @@ PhraseTools - Modern SEO Tool with License Protection
 import sys
 import os
 import re
+import math
 import copy
 import json
 import hashlib
@@ -15,6 +16,7 @@ import uuid
 import socket
 import base64
 import pickle
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import List, Dict, Set, Optional, Tuple
 from dataclasses import dataclass, field
@@ -2872,6 +2874,1038 @@ class GroupingWidget(QWidget):
                 QMessageBox.critical(self, "Ошибка", f"Не удалось экспортировать: {str(e)}")
 
 
+class ClusteringWidget(QWidget):
+    """Кластеризация фраз: semantic / lexical / intent (оффлайн)."""
+    TREE_CLUSTER_ROLE = 2001
+    TREE_PHRASE_ROLE = 2002
+    TREE_FREQ_ROLE = 2003
+
+    SERVICE_TOKENS = {
+        "купить", "куплю", "купим", "купите", "покупка", "покупки",
+        "заказать", "заказ", "заказы", "цена", "цены", "стоимость",
+        "недорого", "дешево", "дёшево", "дешевые", "дешёвые",
+        "акция", "скидка", "скидки", "распродажа", "доставка", "самовывоз",
+        "отзывы", "обзор", "обзоры", "фото", "видео", "сайт", "официальный",
+        "каталог", "москва", "москве", "москвы", "спб", "санкт", "петербург",
+        "buy", "price", "prices", "cheap", "review", "reviews",
+        "official", "site", "delivery", "order", "sale", "discount",
+        "online", "shop",
+    }
+    SERVICE_PREFIXES = (
+        "достав", "скид", "акци", "распрод", "отзыв", "обзор",
+        "официал", "каталог", "discount", "deliver", "review",
+    )
+    INTENT_ALIASES = {
+        "купить": "Купить",
+        "куплю": "Купить",
+        "купим": "Купить",
+        "купите": "Купить",
+        "покупка": "Купить",
+        "покупки": "Купить",
+        "заказать": "Заказать",
+        "заказ": "Заказать",
+        "заказы": "Заказать",
+        "цена": "Цены",
+        "цены": "Цены",
+        "стоимость": "Цены",
+        "недорого": "Недорого",
+        "дешево": "Недорого",
+        "дёшево": "Недорого",
+        "доставка": "Доставка",
+        "самовывоз": "Доставка",
+        "акция": "Акции",
+        "скидка": "Акции",
+        "скидки": "Акции",
+        "распродажа": "Акции",
+        "отзывы": "Отзывы",
+        "обзор": "Обзоры",
+        "обзоры": "Обзоры",
+        "buy": "Buy",
+        "order": "Order",
+        "price": "Price",
+        "prices": "Price",
+        "review": "Reviews",
+        "reviews": "Reviews",
+        "sale": "Sale",
+        "discount": "Sale",
+    }
+    INTENT_RULES = {
+        "transactional": {
+            "купить", "заказать", "заказ", "цена", "цены", "стоимость",
+            "доставка", "оптом", "sale", "buy", "price", "order", "discount",
+        },
+        "informational": {
+            "как", "что", "почему", "зачем", "обзор", "обзоры",
+            "отзыв", "отзывы", "guide", "how", "what", "review",
+        },
+        "navigational": {
+            "сайт", "официальный", "официальн", "вход", "логин", "login",
+            "контакты", "контакт", "адрес", "телефон", "кабинет", "app",
+        },
+    }
+    INTENT_DISPLAY = {
+        "transactional": "Транзакционный",
+        "informational": "Информационный",
+        "navigational": "Навигационный",
+        "other": "Смешанный",
+    }
+    _INTENT_SIGNATURE_RULES_CACHE: Optional[Dict[str, Set[str]]] = None
+
+    def __init__(self):
+        super().__init__()
+        self.current_theme = "light"
+        self.source_phrases: List[Tuple[str, int]] = []
+        self.clusters: Dict[str, List[Tuple[str, int]]] = {}
+        self._feature_cache: Dict[str, Tuple[str, Set[str], Set[str], Set[str]]] = {}
+        self.setup_ui()
+        self.apply_theme("light")
+
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        header_layout = QHBoxLayout()
+
+        self.header_label = QLabel("Кластеризация")
+        self.header_label.setFont(QFont("Arial", 15, QFont.Bold))
+        self.header_label.setContentsMargins(4, 0, 0, 0)
+        self.header_label.setIndent(2)
+        header_layout.addWidget(self.header_label)
+
+        header_layout.addStretch()
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("Лексическая", "lexical")
+        self.mode_combo.addItem("Семантическая", "semantic")
+        self.mode_combo.addItem("Интент", "intent")
+        self.mode_combo.currentIndexChanged.connect(self.rebuild_clusters)
+        header_layout.addWidget(self.mode_combo)
+
+        self.export_btn = ModernButton("Экспорт")
+        self.export_btn.clicked.connect(self.export_clusters)
+        header_layout.addWidget(self.export_btn)
+
+        layout.addLayout(header_layout)
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Кластер / Фраза", "Частотность"])
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.show_tree_context_menu)
+        layout.addWidget(self.tree)
+
+        self.setLayout(layout)
+
+    def apply_theme(self, theme: str):
+        self.current_theme = "dark" if theme == "dark" else "light"
+        if self.current_theme == "dark":
+            self.header_label.setStyleSheet("color: #f2f2f7;")
+            self.mode_combo.setStyleSheet("""
+                QComboBox {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 5px 30px 5px 10px;
+                    min-height: 20px;
+                }
+                QComboBox:hover {
+                    border-color: #5a5a60;
+                }
+                QComboBox:focus {
+                    border: 1px solid #0a84ff;
+                }
+                QComboBox::drop-down {
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 24px;
+                    border: none;
+                    border-left: 1px solid #4b4b50;
+                    background-color: #3a3a3c;
+                    border-top-right-radius: 8px;
+                    border-bottom-right-radius: 8px;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 6px solid #b8b8bf;
+                    margin-right: 6px;
+                    width: 0px;
+                    height: 0px;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    selection-background-color: #3a3a3c;
+                    selection-color: #ffffff;
+                    outline: none;
+                }
+            """)
+            self.tree.setStyleSheet("""
+                QTreeWidget {
+                    background-color: #1c1c1e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    padding: 5px;
+                    font-size: 13px;
+                    color: #f2f2f7;
+                }
+                QTreeWidget::item {
+                    padding: 4px;
+                }
+                QTreeWidget::item:selected {
+                    background-color: #3a3a3c;
+                    color: #ffffff;
+                }
+                QHeaderView::section {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    font-family: Arial;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    padding-left: 10px;
+                    padding-right: 6px;
+                    border: none;
+                    border-bottom: 1px solid #4b4b50;
+                    font-weight: 600;
+                }
+            """)
+            if hasattr(self.export_btn, "apply_theme"):
+                self.export_btn.apply_theme("dark")
+            return
+
+        self.header_label.setStyleSheet("color: #000000;")
+        self.mode_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                color: #1b1b1f;
+                border: 1px solid #c7c7cc;
+                border-radius: 8px;
+                padding: 5px 30px 5px 10px;
+                min-height: 20px;
+            }
+            QComboBox:hover {
+                border-color: #aeb3bd;
+            }
+            QComboBox:focus {
+                border: 1px solid #007aff;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border: none;
+                border-left: 1px solid #d5d8de;
+                background-color: #f3f5fb;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #5e6674;
+                margin-right: 6px;
+                width: 0px;
+                height: 0px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #ffffff;
+                color: #1b1b1f;
+                border: 1px solid #cfd3dc;
+                selection-background-color: #eaf2ff;
+                selection-color: #1b1b1f;
+                outline: none;
+            }
+        """)
+        self.tree.setStyleSheet("""
+            QTreeWidget {
+                background-color: #ffffff;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 13px;
+                color: #000000;
+            }
+            QTreeWidget::item {
+                padding: 4px;
+            }
+            QTreeWidget::item:selected {
+                background-color: #e5e5ea;
+                color: #000000;
+            }
+            QHeaderView::section {
+                background-color: #f2f2f7;
+                color: #000000;
+                font-family: Arial;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                padding-left: 10px;
+                padding-right: 6px;
+                border: none;
+                border-bottom: 1px solid #c7c7cc;
+                font-weight: 600;
+            }
+        """)
+        if hasattr(self.export_btn, "apply_theme"):
+            self.export_btn.apply_theme("light")
+
+    def update_clusters(self, phrases: List[Tuple[str, int]]):
+        updated = [(str(p), int(f)) for p, f in (phrases or []) if str(p).strip()]
+        if updated == self.source_phrases:
+            return
+        self.source_phrases = updated
+        if len(self._feature_cache) > 50000:
+            self._feature_cache.clear()
+        self.rebuild_clusters()
+
+    def rebuild_clusters(self):
+        mode = self.mode_combo.currentData()
+        if mode in {"semantic", "similarity"}:
+            cluster_lists = self._build_clusters_by_similarity(self.source_phrases)
+        elif mode == "intent":
+            cluster_lists = self._build_clusters_by_intent(self.source_phrases)
+        else:
+            cluster_lists = self._build_clusters_by_word_overlap(self.source_phrases)
+
+        named_clusters: Dict[str, List[Tuple[str, int]]] = {}
+        used_names = defaultdict(int)
+        for idx, cluster in enumerate(cluster_lists, start=1):
+            base_name = self._build_cluster_name(cluster, idx, mode)
+            used_names[base_name] += 1
+            if used_names[base_name] > 1:
+                cluster_name = f"{base_name} #{used_names[base_name]}"
+            else:
+                cluster_name = base_name
+            named_clusters[cluster_name] = cluster
+
+        self.clusters = named_clusters
+
+        self.tree.clear()
+        for cluster_name, cluster_phrases in self.clusters.items():
+            cluster_item = QTreeWidgetItem(self.tree)
+            cluster_item.setText(0, f"{cluster_name} ({len(cluster_phrases)})")
+            cluster_item.setExpanded(True)
+            cluster_item.setData(0, self.TREE_CLUSTER_ROLE, cluster_name)
+
+            for phrase, freq in cluster_phrases:
+                phrase_item = QTreeWidgetItem(cluster_item)
+                phrase_item.setText(0, phrase)
+                phrase_item.setText(1, str(freq))
+                phrase_item.setData(0, self.TREE_CLUSTER_ROLE, cluster_name)
+                phrase_item.setData(0, self.TREE_PHRASE_ROLE, phrase)
+                phrase_item.setData(0, self.TREE_FREQ_ROLE, int(freq))
+
+                if freq >= 100000:
+                    phrase_item.setForeground(1, QBrush(QColor(255, 59, 48)))
+                elif freq >= 10000:
+                    phrase_item.setForeground(1, QBrush(QColor(255, 149, 0)))
+                elif freq >= 1000:
+                    phrase_item.setForeground(1, QBrush(QColor(255, 204, 0)))
+                elif freq >= 100:
+                    phrase_item.setForeground(1, QBrush(QColor(52, 199, 36)))
+                else:
+                    phrase_item.setForeground(1, QBrush(QColor(142, 142, 147)))
+
+    @staticmethod
+    def _tokenize(text: str) -> Set[str]:
+        tokens = re.findall(r"[a-zA-Zа-яА-Я0-9_]+", text.lower())
+        result = set()
+        for token in tokens:
+            if len(token) > 2 or (len(token) > 1 and any(ch.isdigit() for ch in token)):
+                result.add(token)
+        return result
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        cleaned = re.sub(r"[^\w\s]", " ", text.lower())
+        return re.sub(r"\s+", " ", cleaned).strip()
+
+    @staticmethod
+    def _token_signature(token: str) -> str:
+        token = token.lower().strip("_")
+        if not token:
+            return ""
+        if token.isdigit():
+            return token
+
+        if re.search(r"[а-я]", token):
+            for suffix in (
+                "иями", "ями", "ами", "ого", "ему", "ыми", "ими",
+                "его", "ому", "иях", "ах", "ях", "ия", "ие", "ий",
+                "ой", "ый", "ая", "ое", "ые", "ов", "ев", "ам", "ям",
+                "ом", "ем", "ую", "юю", "а", "я", "у", "ю", "ы", "и",
+                "е", "о",
+            ):
+                if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+                    return token[:-len(suffix)]
+            return token
+
+        if re.search(r"[a-z]", token):
+            if token.endswith("ies") and len(token) > 4:
+                return token[:-3] + "y"
+            for suffix in ("ing", "ers", "er", "ed", "es", "s"):
+                if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+                    return token[:-len(suffix)]
+
+        return token
+
+    @classmethod
+    def _is_service_token(cls, token: str) -> bool:
+        token = token.lower()
+        if token in cls.SERVICE_TOKENS:
+            return True
+        return any(token.startswith(prefix) for prefix in cls.SERVICE_PREFIXES)
+
+    @classmethod
+    def _intent_label_for_token(cls, token: str) -> Optional[str]:
+        token = token.lower()
+        if token in cls.INTENT_ALIASES:
+            return cls.INTENT_ALIASES[token]
+        signature = cls._token_signature(token)
+        return cls.INTENT_ALIASES.get(signature)
+
+    @classmethod
+    def _intent_rule_signatures(cls) -> Dict[str, Set[str]]:
+        if cls._INTENT_SIGNATURE_RULES_CACHE is not None:
+            return cls._INTENT_SIGNATURE_RULES_CACHE
+
+        result = {}
+        for intent, words in cls.INTENT_RULES.items():
+            signatures = {cls._token_signature(word) for word in words}
+            signatures.discard("")
+            result[intent] = signatures
+        cls._INTENT_SIGNATURE_RULES_CACHE = result
+        return result
+
+    def _detect_intent(
+            self,
+            normalized: str,
+            raw_tokens: Set[str],
+            raw_signatures: Set[str],
+            effective_signatures: Set[str]
+    ) -> str:
+        rule_signatures = self._intent_rule_signatures()
+        scores = defaultdict(float)
+        phrase_signatures = effective_signatures or raw_signatures
+
+        for intent, signatures in rule_signatures.items():
+            direct_hits = len(phrase_signatures & signatures)
+            if direct_hits:
+                scores[intent] += direct_hits * 1.6
+
+            for token in raw_tokens:
+                token = token.lower()
+                if token in self.INTENT_RULES[intent]:
+                    scores[intent] += 1.2
+
+        if not scores:
+            return "other"
+
+        best_intent, best_score = max(scores.items(), key=lambda item: (item[1], item[0]))
+        if best_score < 1.2:
+            return "other"
+        return best_intent
+
+    @staticmethod
+    def _token_overlap(left: Set[str], right: Set[str]) -> float:
+        if not left or not right:
+            return 0.0
+        return len(left & right) / (min(len(left), len(right)) or 1)
+
+    def _extract_features(self, phrase: str) -> Tuple[str, Set[str], Set[str], Set[str]]:
+        cached = self._feature_cache.get(phrase)
+        if cached is not None:
+            return cached
+
+        normalized = self._normalize(phrase)
+        raw_tokens = self._tokenize(normalized)
+        if not raw_tokens and normalized:
+            raw_tokens = {normalized.replace(" ", "_")}
+
+        raw_signatures = {
+            self._token_signature(token)
+            for token in raw_tokens
+            if token
+        }
+        raw_signatures.discard("")
+
+        effective_signatures = {
+            self._token_signature(token)
+            for token in raw_tokens
+            if token and not self._is_service_token(token)
+        }
+        effective_signatures.discard("")
+
+        packed = (
+            normalized,
+            frozenset(raw_tokens),
+            frozenset(raw_signatures),
+            frozenset(effective_signatures),
+        )
+        if len(self._feature_cache) <= 50000:
+            self._feature_cache[phrase] = packed
+        return packed
+
+    def _build_cluster_name(self, cluster_phrases: List[Tuple[str, int]], cluster_idx: int, mode: str = "") -> str:
+        if not cluster_phrases:
+            return f"Кластер {cluster_idx}"
+
+        thematic_scores = defaultdict(float)
+        thematic_coverage = defaultdict(int)
+        token_variants: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        intent_scores = defaultdict(float)
+
+        for phrase, freq in cluster_phrases:
+            normalized, raw_tokens, raw_signatures, effective_signatures = self._extract_features(phrase)
+            weight = 1.0 + math.log1p(max(freq, 0))
+            phrase_signatures = set()
+
+            for token in raw_tokens:
+                intent_label = self._intent_label_for_token(token)
+                if intent_label:
+                    intent_scores[intent_label] += weight
+
+            thematic_source = effective_signatures or raw_signatures
+            for token in raw_tokens:
+                signature = self._token_signature(token)
+                if signature not in thematic_source:
+                    continue
+                phrase_signatures.add(signature)
+                thematic_scores[signature] += weight
+                token_variants[signature][token.replace("_", " ")] += weight
+
+            # Если после фильтра токенов ничего не осталось, добавляем нормализованный хвост фразы
+            if not phrase_signatures and normalized:
+                fallback_signature = self._token_signature(normalized.replace(" ", "_"))
+                if fallback_signature:
+                    phrase_signatures.add(fallback_signature)
+                    thematic_scores[fallback_signature] += weight * 0.5
+                    token_variants[fallback_signature][normalized] += weight * 0.5
+
+            for signature in phrase_signatures:
+                thematic_coverage[signature] += 1
+
+        cluster_size = len(cluster_phrases)
+        min_coverage = 2 if cluster_size >= 4 else 1
+
+        ranked_signatures = sorted(
+            thematic_scores.keys(),
+            key=lambda sig: (
+                thematic_scores[sig] * (1.0 + thematic_coverage[sig] / max(cluster_size, 1)),
+                thematic_coverage[sig],
+                len(sig),
+                sig,
+            ),
+            reverse=True,
+        )
+
+        topic_tokens = []
+        topic_seen = set()
+        for signature in ranked_signatures:
+            coverage = thematic_coverage[signature]
+            if coverage < min_coverage and topic_tokens:
+                continue
+
+            variants = token_variants.get(signature) or {}
+            token = max(variants.items(), key=lambda item: (item[1], len(item[0]), item[0]))[0] if variants else signature
+            token = token.replace("_", " ").strip()
+            token_lc = token.lower()
+            if not token or token_lc in topic_seen:
+                continue
+            topic_seen.add(token_lc)
+            topic_tokens.append(token)
+            if len(topic_tokens) >= 3:
+                break
+
+        if not topic_tokens:
+            top_phrase = max(cluster_phrases, key=lambda x: (x[1], len(x[0])))
+            ordered_words = [
+                word for word in self._normalize(top_phrase[0]).split()
+                if len(word) > 2 and not self._is_service_token(word)
+            ]
+            if not ordered_words:
+                ordered_words = [word for word in self._normalize(top_phrase[0]).split() if len(word) > 2]
+            topic_tokens = ordered_words[:3]
+
+        intent_label = ""
+        if intent_scores:
+            intent_label = max(intent_scores.items(), key=lambda item: (item[1], item[0]))[0]
+
+        base_topic = " ".join(topic_tokens).strip()
+        if len(base_topic) > 48:
+            base_topic = base_topic[:48].rstrip()
+
+        if intent_label and base_topic:
+            if intent_label.lower() in base_topic.lower():
+                name = base_topic
+            else:
+                name = f"{intent_label} | {base_topic}"
+        elif base_topic:
+            name = base_topic
+        elif intent_label:
+            name = intent_label
+        else:
+            top_phrase = max(cluster_phrases, key=lambda x: (x[1], len(x[0])))
+            name = self._normalize(top_phrase[0])[:48].rstrip()
+
+        if mode == "intent":
+            intent_scores = defaultdict(float)
+            for phrase, freq in cluster_phrases:
+                normalized, raw_tokens, raw_signatures, effective_signatures = self._extract_features(phrase)
+                intent = self._detect_intent(normalized, raw_tokens, raw_signatures, effective_signatures)
+                intent_scores[intent] += 1.0 + math.log1p(max(freq, 0))
+            if intent_scores:
+                dominant_intent = max(intent_scores.items(), key=lambda item: (item[1], item[0]))[0]
+                intent_label = self.INTENT_DISPLAY.get(dominant_intent, dominant_intent.capitalize())
+                if intent_label and intent_label.lower() not in name.lower():
+                    name = f"{intent_label} | {name}" if name else intent_label
+
+        name = re.sub(r"\s+", " ", name).strip(" |")
+        if not name:
+            return f"Кластер {cluster_idx}"
+        if len(name) > 60:
+            name = name[:60].rstrip()
+        if name[0].islower():
+            name = name[0].upper() + name[1:]
+        return name
+
+    @staticmethod
+    def _safe_excel_sheet_name(name: str, used_names: Set[str]) -> str:
+        cleaned = re.sub(r"[:\\/?*\[\]]", " ", str(name))
+        cleaned = re.sub(r"\s+", " ", cleaned).strip() or "Кластер"
+        cleaned = cleaned[:31].strip() or "Кластер"
+
+        candidate = cleaned
+        counter = 2
+        while candidate in used_names:
+            suffix = f"_{counter}"
+            base = cleaned[:max(1, 31 - len(suffix))].rstrip()
+            candidate = f"{base}{suffix}".strip()
+            counter += 1
+        used_names.add(candidate)
+        return candidate
+
+    @staticmethod
+    def _safe_export_file_stem(text: str, fallback: str = "clusters") -> str:
+        cleaned = re.sub(r'[\\/:*?"<>|]+', "_", str(text))
+        cleaned = re.sub(r"\s+", "_", cleaned).strip("._")
+        cleaned = cleaned[:80].strip("._")
+        return cleaned or fallback
+
+    def _export_cluster_map(self, cluster_map: Dict[str, List[Tuple[str, int]]], default_file_name: str, success_text: str):
+        if not cluster_map:
+            QMessageBox.warning(self, "Предупреждение", "Нет данных для экспорта")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить кластеры",
+            default_file_name,
+            "Excel files (*.xlsx)"
+        )
+        if not file_path:
+            return
+
+        try:
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                used_sheet_names = set()
+                for cluster_name, cluster_phrases in cluster_map.items():
+                    df = pd.DataFrame(cluster_phrases, columns=['Фраза', 'Частотность'])
+                    sheet_name = self._safe_excel_sheet_name(cluster_name, used_sheet_names)
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            QMessageBox.information(self, "Успех", success_text)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось экспортировать: {str(e)}")
+
+    def show_tree_context_menu(self, pos):
+        item = self.tree.itemAt(pos)
+        if not item:
+            return
+
+        self.tree.setCurrentItem(item)
+        menu = QMenu(self)
+
+        cluster_name = item.data(0, self.TREE_CLUSTER_ROLE)
+        if item.parent() is None:
+            export_cluster_action = menu.addAction("Экспортировать выбранный кластер")
+            export_cluster_action.triggered.connect(
+                lambda checked=False, cluster=cluster_name: self.export_selected_cluster(cluster)
+            )
+        else:
+            phrase = item.data(0, self.TREE_PHRASE_ROLE) or item.text(0)
+            freq_value = item.data(0, self.TREE_FREQ_ROLE)
+            if freq_value is None:
+                try:
+                    freq_value = int(item.text(1))
+                except Exception:
+                    freq_value = 0
+
+            export_phrase_action = menu.addAction("Экспортировать эту фразу")
+            export_phrase_action.triggered.connect(
+                lambda checked=False, c=cluster_name, p=phrase, f=int(freq_value): self.export_selected_phrase(c, p, f)
+            )
+
+            export_cluster_action = menu.addAction("Экспортировать кластер этой фразы")
+            export_cluster_action.triggered.connect(
+                lambda checked=False, cluster=cluster_name: self.export_selected_cluster(cluster)
+            )
+
+        menu.exec_(self.tree.viewport().mapToGlobal(pos))
+
+    def export_selected_cluster(self, cluster_name: str):
+        if not cluster_name or cluster_name not in self.clusters:
+            QMessageBox.warning(self, "Предупреждение", "Выбранный кластер не найден")
+            return
+
+        file_stem = self._safe_export_file_stem(cluster_name, "cluster")
+        self._export_cluster_map(
+            {cluster_name: self.clusters[cluster_name]},
+            f"{file_stem}.xlsx",
+            f"Кластер «{cluster_name}» экспортирован"
+        )
+
+    def export_selected_phrase(self, cluster_name: str, phrase: str, freq: int):
+        if not phrase:
+            QMessageBox.warning(self, "Предупреждение", "Фраза не выбрана")
+            return
+
+        export_name = f"{cluster_name} | {phrase}" if cluster_name else phrase
+        file_stem = self._safe_export_file_stem(phrase, "phrase")
+        self._export_cluster_map(
+            {export_name: [(phrase, int(freq))]},
+            f"{file_stem}.xlsx",
+            "Фраза экспортирована"
+        )
+
+    def _clusters_from_parent(self, phrases: List[Tuple[str, int]], parent: List[int]) -> List[List[Tuple[str, int]]]:
+        groups = defaultdict(list)
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for idx, item in enumerate(phrases):
+            groups[find(idx)].append(item)
+
+        clusters = []
+        for items in groups.values():
+            sorted_items = sorted(items, key=lambda x: (-x[1], x[0].lower()))
+            clusters.append(sorted_items)
+
+        clusters.sort(key=lambda c: (-len(c), -sum(freq for _, freq in c), c[0][0].lower() if c else ""))
+        return clusters
+
+    def _build_clusters_by_word_overlap(self, phrases: List[Tuple[str, int]]) -> List[List[Tuple[str, int]]]:
+        n = len(phrases)
+        if n == 0:
+            return []
+
+        parent = list(range(n))
+        size = [1] * n
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a: int, b: int):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                if size[ra] < size[rb]:
+                    ra, rb = rb, ra
+                parent[rb] = ra
+                size[ra] += size[rb]
+
+        primary_signatures = []
+        signature_df = defaultdict(int)
+
+        for phrase, _ in phrases:
+            _, _, raw_sig, eff_sig = self._extract_features(phrase)
+            primary = eff_sig or raw_sig
+            primary_signatures.append(primary)
+            for signature in primary:
+                signature_df[signature] += 1
+
+        max_common_df = min(max(12, int(n * 0.10)), 420)
+        rare_single_df = min(max(4, int(n * 0.015)), 40)
+        max_phrase_tokens = 6
+        pair_anchor = {}
+        single_anchor = {}
+
+        for idx in range(n):
+            primary = primary_signatures[idx]
+            if not primary:
+                continue
+
+            usable = [token for token in primary if signature_df[token] <= max_common_df]
+            if len(usable) < 2:
+                ranked = sorted(primary, key=lambda token: (signature_df[token], -len(token), token))
+                usable = ranked[:min(max_phrase_tokens, len(ranked))]
+            else:
+                usable = sorted(usable, key=lambda token: (signature_df[token], -len(token), token))
+
+            if len(usable) > max_phrase_tokens:
+                usable = usable[:max_phrase_tokens]
+
+            if len(usable) >= 2:
+                limit = len(usable)
+                for left_pos in range(limit - 1):
+                    left = usable[left_pos]
+                    for right_pos in range(left_pos + 1, limit):
+                        right = usable[right_pos]
+                        key = (left, right) if left <= right else (right, left)
+                        anchor = pair_anchor.get(key)
+                        if anchor is None:
+                            pair_anchor[key] = idx
+                        else:
+                            union(idx, anchor)
+                continue
+
+            token = usable[0]
+            if signature_df[token] <= rare_single_df:
+                anchor = single_anchor.get(token)
+                if anchor is None:
+                    single_anchor[token] = idx
+                else:
+                    union(idx, anchor)
+
+        return self._clusters_from_parent(phrases, parent)
+
+    def _build_clusters_by_similarity(self, phrases: List[Tuple[str, int]]) -> List[List[Tuple[str, int]]]:
+        n = len(phrases)
+        if n == 0:
+            return []
+
+        parent = list(range(n))
+        size = [1] * n
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a: int, b: int):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                if size[ra] < size[rb]:
+                    ra, rb = rb, ra
+                parent[rb] = ra
+                size[ra] += size[rb]
+
+        normalized = []
+        raw_signatures = []
+        primary_signatures = []
+        signature_df = defaultdict(int)
+
+        for phrase, _ in phrases:
+            norm, _, raw_sig, eff_sig = self._extract_features(phrase)
+            normalized.append(norm)
+            raw_signatures.append(raw_sig)
+            primary = eff_sig or raw_sig
+            primary_signatures.append(primary)
+            for signature in primary:
+                signature_df[signature] += 1
+
+        scale = max(6, int(math.sqrt(n)))
+        max_seed_df = min(max(16, scale * 3), 1200)
+        bucket_cap = min(max(120, scale * 6), 600)
+        max_candidates_per_phrase = 64
+        seed_limit = 2
+        min_length_ratio = 0.42
+
+        seeds_by_idx = []
+        seed_buckets = defaultdict(list)
+
+        for idx in range(n):
+            primary = primary_signatures[idx]
+            if primary:
+                ranked = sorted(primary, key=lambda token: (signature_df[token], -len(token), token))
+                seeds = ranked[:seed_limit]
+            else:
+                seeds = []
+
+            if normalized[idx]:
+                parts = normalized[idx].split()
+                if len(parts) >= 2:
+                    prefix_seed = f"__pref__{parts[0][:8]}_{parts[1][:8]}"
+                    if prefix_seed not in seeds:
+                        seeds.append(prefix_seed)
+                elif parts:
+                    prefix_seed = f"__pref__{parts[0][:8]}"
+                    if prefix_seed not in seeds:
+                        seeds.append(prefix_seed)
+
+            if not seeds and normalized[idx]:
+                seeds = [f"__text__{normalized[idx][:12]}"]
+
+            seeds_by_idx.append(seeds)
+            for pos, seed in enumerate(seeds):
+                bucket = seed_buckets[seed]
+                if len(bucket) >= bucket_cap:
+                    continue
+
+                if seed.startswith("__pref__") or seed.startswith("__text__"):
+                    bucket.append(idx)
+                    continue
+
+                token_df = signature_df.get(seed, 0)
+                if token_df <= max_seed_df or pos == 0:
+                    bucket.append(idx)
+
+        normalized_lengths = [len(text) for text in normalized]
+
+        for i in range(n):
+            seed_votes = defaultdict(int)
+            for seed in seeds_by_idx[i]:
+                bucket = seed_buckets.get(seed)
+                if not bucket:
+                    continue
+                for j in bucket:
+                    if j <= i:
+                        continue
+                    seed_votes[j] += 1
+
+            if not seed_votes:
+                continue
+
+            candidates = list(seed_votes.items())
+            if len(candidates) > max_candidates_per_phrase:
+                candidates.sort(
+                    key=lambda item: (
+                        item[1],
+                        -abs(normalized_lengths[i] - normalized_lengths[item[0]]),
+                    ),
+                    reverse=True,
+                )
+                candidates = candidates[:max_candidates_per_phrase]
+
+            primary_i = primary_signatures[i]
+            raw_i = raw_signatures[i]
+            len_i = normalized_lengths[i]
+            norm_i = normalized[i]
+
+            for j, votes in candidates:
+                len_j = normalized_lengths[j]
+                if not len_i or not len_j:
+                    continue
+                length_ratio = min(len_i, len_j) / max(len_i, len_j)
+                if length_ratio < min_length_ratio:
+                    continue
+
+                primary_j = primary_signatures[j]
+                raw_j = raw_signatures[j]
+
+                shared_primary = len(primary_i & primary_j)
+                if shared_primary == 0 and votes < 2:
+                    continue
+
+                primary_overlap = self._token_overlap(primary_i, primary_j)
+                if primary_overlap < 0.2 and votes < 2:
+                    continue
+
+                shared_raw = len(raw_i & raw_j)
+                raw_union_size = len(raw_i | raw_j) or 1
+                primary_union_size = len(primary_i | primary_j) or 1
+                raw_jaccard = shared_raw / raw_union_size
+                primary_jaccard = shared_primary / primary_union_size
+
+                coarse_score = (
+                    0.45 * primary_overlap +
+                    0.30 * raw_jaccard +
+                    0.15 * primary_jaccard +
+                    0.10 * min(votes, 2) / 2.0
+                )
+                if coarse_score < 0.20:
+                    continue
+
+                if shared_primary >= 2 and (primary_overlap >= 0.34 or primary_jaccard >= 0.26):
+                    union(i, j)
+                    continue
+
+                if coarse_score >= 0.60 and (shared_primary >= 2 or raw_jaccard >= 0.45):
+                    union(i, j)
+                    continue
+
+                norm_j = normalized[j]
+                contains = norm_i in norm_j or norm_j in norm_i
+                if contains and shared_primary >= 1 and length_ratio >= 0.55:
+                    union(i, j)
+                    continue
+
+                if not contains and coarse_score < 0.40:
+                    continue
+
+                seq_ratio = 0.0
+                if len_i <= 120 and len_j <= 120:
+                    seq_ratio = SequenceMatcher(None, norm_i, norm_j).ratio()
+
+                score = (
+                    0.35 * primary_overlap +
+                    0.25 * raw_jaccard +
+                    0.20 * primary_jaccard +
+                    0.20 * seq_ratio
+                )
+                if contains:
+                    score += 0.06
+
+                if score >= 0.64:
+                    union(i, j)
+                    continue
+
+                if contains and seq_ratio >= 0.70 and (shared_primary >= 1 or raw_jaccard >= 0.35):
+                    union(i, j)
+                    continue
+
+                if seq_ratio >= 0.88 and raw_jaccard >= 0.28:
+                    union(i, j)
+
+        return self._clusters_from_parent(phrases, parent)
+
+    def _build_clusters_by_intent(self, phrases: List[Tuple[str, int]]) -> List[List[Tuple[str, int]]]:
+        if not phrases:
+            return []
+
+        intent_groups = defaultdict(list)
+        for phrase, freq in phrases:
+            normalized, raw_tokens, raw_signatures, effective_signatures = self._extract_features(phrase)
+            intent = self._detect_intent(normalized, raw_tokens, raw_signatures, effective_signatures)
+            intent_groups[intent].append((phrase, freq))
+
+        all_clusters = []
+        ordered_intents = sorted(
+            intent_groups.keys(),
+            key=lambda key: (key == "other", key)
+        )
+
+        for intent in ordered_intents:
+            group_phrases = intent_groups[intent]
+            if len(group_phrases) <= 1:
+                all_clusters.extend([[item] for item in group_phrases])
+                continue
+
+            sub_clusters = self._build_clusters_by_word_overlap(group_phrases)
+            all_clusters.extend(sub_clusters)
+
+        all_clusters.sort(
+            key=lambda c: (
+                -len(c),
+                -sum(freq for _, freq in c),
+                c[0][0].lower() if c else ""
+            )
+        )
+        return all_clusters
+
+    def export_clusters(self):
+        self._export_cluster_map(self.clusters, "clusters.xlsx", "Кластеры экспортированы")
+
+
 class FolderColorDelegate(QStyledItemDelegate):
     """Делегат для отрисовки полупрозрачного фона у строк папок"""
 
@@ -3837,6 +4871,8 @@ class MainWindow(QMainWindow):
         self.setup_native_menu()
         self.apply_theme(self.theme_mode)
         self.phrase_tabs.currentChanged.connect(self.on_phrase_tab_changed)
+        self.tabs.currentChanged.connect(self.on_side_tab_changed)
+        self.general_tab.currentChanged.connect(self.on_general_tab_changed)
         self.phrase_tabs.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.phrase_tabs.tabBar().customContextMenuRequested.connect(self.show_tab_context_menu)
         self.phrase_tabs.setTabsClosable(False)
@@ -4087,6 +5123,9 @@ class MainWindow(QMainWindow):
         self.grouping_widget = GroupingWidget()
         self.tabs.addTab(self.grouping_widget, "Группировка")
 
+        self.clustering_widget = ClusteringWidget()
+        self.tabs.addTab(self.clustering_widget, "Кластеризация")
+
         self.folders_widget = FoldersWidget()
         self.tabs.addTab(self.folders_widget, "Папки")
 
@@ -4128,6 +5167,9 @@ class MainWindow(QMainWindow):
 
         self.general_grouping = GroupingWidget()
         self.general_tab.addTab(self.general_grouping, "Группировка")
+
+        self.general_clustering = ClusteringWidget()
+        self.general_tab.addTab(self.general_clustering, "Кластеризация")
 
         self.general_folders = FoldersWidget()
         self.general_tab.addTab(self.general_folders, "Папки")
@@ -4747,9 +5789,11 @@ class MainWindow(QMainWindow):
         for panel in (
                 self.stop_words_widget,
                 self.grouping_widget,
+                self.clustering_widget,
                 self.folders_widget,
                 self.general_stop,
                 self.general_grouping,
+                self.general_clustering,
                 self.general_folders
         ):
             if hasattr(panel, "apply_theme"):
@@ -5033,6 +6077,20 @@ class MainWindow(QMainWindow):
         self.update_global_grouping()
         self.update_phrase_count()
 
+    def on_side_tab_changed(self, index: int):
+        current_widget = self.tabs.widget(index)
+        if current_widget is self.clustering_widget:
+            self.update_grouping_widget()
+            return
+        if current_widget is self.general_tab and self.general_tab.currentWidget() is self.general_clustering:
+            self.update_global_grouping()
+
+    def on_general_tab_changed(self, index: int):
+        if self.tabs.currentWidget() is not self.general_tab:
+            return
+        if self.general_tab.widget(index) is self.general_clustering:
+            self.update_global_grouping()
+
     def get_current_tab(self) -> PhraseTab:
         return self.phrase_tabs.currentWidget()
 
@@ -5259,6 +6317,13 @@ class MainWindow(QMainWindow):
             filtered = PhraseProcessor.filter_by_stop_words(current_list.phrases,
                                                             current_list.stop_words | self.global_stop_words)
             self.grouping_widget.update_groups(filtered)
+            if (
+                    hasattr(self, "clustering_widget")
+                    and self.clustering_widget
+                    and hasattr(self, "tabs")
+                    and self.tabs.currentWidget() is self.clustering_widget
+            ):
+                self.clustering_widget.update_clusters(filtered)
 
     def update_global_grouping(self):
         # Синхронизируем текущую вкладку для актуальных данных
@@ -5267,6 +6332,15 @@ class MainWindow(QMainWindow):
         all_phrases = self.get_all_phrases()
         filtered = PhraseProcessor.filter_by_stop_words(all_phrases, self.global_stop_words)
         self.general_grouping.update_groups(filtered)
+        if (
+                hasattr(self, "general_clustering")
+                and self.general_clustering
+                and hasattr(self, "tabs")
+                and hasattr(self, "general_tab")
+                and self.tabs.currentWidget() is self.general_tab
+                and self.general_tab.currentWidget() is self.general_clustering
+        ):
+            self.general_clustering.update_clusters(filtered)
 
     def get_all_phrases(self) -> List[Tuple[str, int]]:
         all_p = []
