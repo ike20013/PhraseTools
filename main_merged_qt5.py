@@ -5,6 +5,7 @@ PhraseTools - Modern SEO Tool with License Protection
 """
 
 import sys
+import os
 import re
 import copy
 import json
@@ -31,9 +32,10 @@ from PyQt5.QtWidgets import (
     QCheckBox, QSpinBox, QGraphicsDropShadowEffect,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle,
     QListWidgetItem, QInputDialog, QDialog, QAction, QShortcut,
-    QTabBar, QStylePainter, QStyleOptionTab, QColorDialog, QToolButton
+    QTabBar, QStylePainter, QStyleOptionTab, QColorDialog, QToolButton,
+    QDialogButtonBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QMimeData, QEvent, QRect
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QMimeData, QEvent, QRect, QSettings
 from PyQt5.QtGui import (
     QFont, QPalette, QColor, QBrush, QLinearGradient,
     QKeySequence, QTextCharFormat, QTextCursor, QPainter,
@@ -367,6 +369,196 @@ class LicenseDialog(QDialog):
                                  "Проверьте правильность ввода или обратитесь к разработчику.")
 
 
+class SettingsDialog(QDialog):
+    """Диалог настроек приложения"""
+
+    def __init__(self, current_theme_mode: str, current_theme: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Настройки")
+        self.setMinimumWidth(360)
+        self.setModal(True)
+        self.current_theme = "dark" if current_theme == "dark" else "light"
+        self._build_ui(current_theme_mode)
+        self._apply_style()
+
+    def _build_ui(self, current_theme_mode: str):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        self.title_label = QLabel("Внешний вид")
+        self.title_label.setFont(QFont("Arial", 13, QFont.Bold))
+        layout.addWidget(self.title_label)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.theme_label = QLabel("Тема интерфейса:")
+        row.addWidget(self.theme_label)
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Системная", "system")
+        self.theme_combo.addItem("Светлая", "light")
+        self.theme_combo.addItem("Темная", "dark")
+        idx = self.theme_combo.findData(current_theme_mode)
+        self.theme_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        row.addWidget(self.theme_combo, 1)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        self.ok_button = buttons.button(QDialogButtonBox.Ok)
+        self.cancel_button = buttons.button(QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        self.setLayout(layout)
+
+    def _apply_style(self):
+        if self.current_theme == "dark":
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 12px;
+                }
+                QLabel {
+                    color: #f2f2f7;
+                }
+                QComboBox {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 9px;
+                    padding: 6px 34px 6px 10px;
+                    min-height: 20px;
+                }
+                QComboBox:hover {
+                    border-color: #5a5a60;
+                }
+                QComboBox:focus {
+                    border: 1px solid #0a84ff;
+                }
+                QComboBox::drop-down {
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 28px;
+                    border: none;
+                    border-left: 1px solid #4b4b50;
+                    background-color: #3a3a3c;
+                    border-top-right-radius: 9px;
+                    border-bottom-right-radius: 9px;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 6px solid #b8b8bf;
+                    margin-right: 8px;
+                    width: 0px;
+                    height: 0px;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    outline: none;
+                    selection-background-color: #3a3a3c;
+                    selection-color: #ffffff;
+                    padding: 4px;
+                }
+                QPushButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 6px 12px;
+                    min-width: 82px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QPushButton:pressed {
+                    background-color: #48484a;
+                }
+            """)
+            return
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+                color: #1b1b1f;
+                border: 1px solid #d7d9df;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #1b1b1f;
+            }
+            QComboBox {
+                background-color: #ffffff;
+                color: #1b1b1f;
+                border: 1px solid #c7c7cc;
+                border-radius: 9px;
+                padding: 6px 34px 6px 10px;
+                min-height: 20px;
+            }
+            QComboBox:hover {
+                border-color: #aeb3bd;
+            }
+            QComboBox:focus {
+                border: 1px solid #007aff;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 28px;
+                border: none;
+                border-left: 1px solid #d5d8de;
+                background-color: #f3f5fb;
+                border-top-right-radius: 9px;
+                border-bottom-right-radius: 9px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #5e6674;
+                margin-right: 8px;
+                width: 0px;
+                height: 0px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #ffffff;
+                color: #1b1b1f;
+                border: 1px solid #cfd3dc;
+                outline: none;
+                selection-background-color: #eaf2ff;
+                selection-color: #1b1b1f;
+                padding: 4px;
+            }
+            QPushButton {
+                background-color: #ffffff;
+                color: #007aff;
+                border: 1px solid #c7c7cc;
+                border-radius: 8px;
+                padding: 6px 12px;
+                min-width: 82px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #f2f4f9;
+            }
+            QPushButton:pressed {
+                background-color: #e7ebf3;
+            }
+        """)
+
+    def selected_theme_mode(self) -> str:
+        mode = self.theme_combo.currentData()
+        return mode if mode in {"light", "dark", "system"} else "system"
+
+
 # Все остальные классы остаются без изменений
 @dataclass
 class Phrase:
@@ -670,6 +862,29 @@ class ModernButton(QPushButton):
         self.setup_style()
 
     def setup_style(self):
+        self.apply_theme("light")
+
+    def apply_theme(self, theme: str):
+        if theme == "dark":
+            self.setStyleSheet("""
+                QPushButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    padding: 6px 12px;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QPushButton:pressed {
+                    background-color: #48484a;
+                }
+            """)
+            return
+
         self.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff;
@@ -696,6 +911,30 @@ class AddButton(QPushButton):
         super().__init__("+", parent)
         self.setObjectName("addPhraseButton")
         self.setFixedSize(24, 24)
+        self.apply_theme("light")
+
+    def apply_theme(self, theme: str):
+        if theme == "dark":
+            self.setStyleSheet("""
+                QPushButton#addPhraseButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    border-radius: 12px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 0px;
+                    text-align: center;
+                }
+                QPushButton#addPhraseButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QPushButton#addPhraseButton:pressed {
+                    background-color: #48484a;
+                }
+            """)
+            return
+
         self.setStyleSheet("""
             QPushButton#addPhraseButton {
                 background-color: #ffffff;
@@ -724,6 +963,7 @@ class SearchWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setup_ui()
+        self.apply_theme("light")
 
     def setup_ui(self):
         layout = QHBoxLayout()
@@ -731,14 +971,7 @@ class SearchWidget(QWidget):
         layout.setSpacing(8)
 
         # Контейнер для поиска
-        search_container = QWidget()
-        search_container.setStyleSheet("""
-            QWidget {
-                background: #ffffff;
-                border-radius: 8px;
-                border: 1px solid #c7c7cc;
-            }
-        """)
+        self.search_container = QWidget()
         search_layout = QHBoxLayout()
         search_layout.setContentsMargins(8, 4, 8, 4)
         search_layout.setSpacing(8)
@@ -749,64 +982,17 @@ class SearchWidget(QWidget):
         self.search_input.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.search_input.setMinimumHeight(22)
         self.search_input.textChanged.connect(self.on_search_changed)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background: transparent;
-                border: none;
-                color: #000000;
-                font-size: 13px;
-                padding: 0px;
-                margin: 0px;
-            }
-            QLineEdit::placeholder {
-                color: #8e8e93;
-            }
-        """)
         search_layout.addWidget(self.search_input)
 
-        search_container.setLayout(search_layout)
-        layout.addWidget(search_container)
+        self.search_container.setLayout(search_layout)
+        layout.addWidget(self.search_container)
 
         # Чекбокс "Только совпадения"
         self.only_matches = QCheckBox("Только совпадения")
-        self.only_matches.setStyleSheet("""
-            QCheckBox {
-                color: #000000;
-                font-size: 12px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border-radius: 4px;
-                border: 1px solid #c7c7cc;
-                background: #ffffff;
-            }
-            QCheckBox::indicator:checked {
-                background: #007aff;
-                border: 1px solid #007aff;
-            }
-        """)
         self.only_matches.toggled.connect(self.on_filter_changed)
         layout.addWidget(self.only_matches)
 
         self.exact_search = QCheckBox("Точный поиск")
-        self.exact_search.setStyleSheet("""
-            QCheckBox {
-                color: #000000;
-                font-size: 12px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border-radius: 4px;
-                border: 1px solid #c7c7cc;
-                background: #ffffff;
-            }
-            QCheckBox::indicator:checked {
-                background: #007aff;
-                border: 1px solid #007aff;
-            }
-        """)
         self.exact_search.toggled.connect(self.on_filter_changed)
         layout.addWidget(self.exact_search)
 
@@ -814,43 +1000,142 @@ class SearchWidget(QWidget):
         self.prev_btn = QPushButton("◀")
         self.prev_btn.setFixedSize(30, 24)
         self.prev_btn.setEnabled(False)
-        self.prev_btn.setStyleSheet("""
-            QPushButton {
-                background: #ffffff;
-                border: 1px solid #c7c7cc;
-                border-radius: 6px;
-                color: #007aff;
-                font-size: 12px;
-            }
-            QPushButton:hover:enabled {
-                background: #f2f2f7;
-            }
-            QPushButton:disabled {
-                color: #c7c7cc;
-            }
-        """)
         layout.addWidget(self.prev_btn)
 
         self.next_btn = QPushButton("▶")
         self.next_btn.setFixedSize(30, 24)
         self.next_btn.setEnabled(False)
-        self.next_btn.setStyleSheet(self.prev_btn.styleSheet())
         layout.addWidget(self.next_btn)
 
         # Счетчик результатов
         self.result_label = QLabel("")
-        self.result_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #8e8e93;
-                padding: 0 8px;
-            }
-        """)
         layout.addWidget(self.result_label)
 
         layout.addStretch()
         self.setLayout(layout)
         self.setMaximumHeight(40)
+
+    def apply_theme(self, theme: str):
+        if theme == "dark":
+            self.search_container.setStyleSheet("""
+                QWidget {
+                    background: #1f1f23;
+                    border-radius: 8px;
+                    border: 1px solid #4b4b50;
+                }
+            """)
+            self.search_input.setStyleSheet("""
+                QLineEdit {
+                    background: transparent;
+                    border: none;
+                    color: #f2f2f7;
+                    font-size: 13px;
+                    padding: 0px;
+                    margin: 0px;
+                }
+                QLineEdit::placeholder {
+                    color: #8e8e93;
+                }
+            """)
+            checkbox_style = """
+                QCheckBox {
+                    color: #f2f2f7;
+                    font-size: 12px;
+                }
+                QCheckBox::indicator {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 4px;
+                    border: 1px solid #5a5a60;
+                    background: #2c2c2e;
+                }
+                QCheckBox::indicator:checked {
+                    background: #0a84ff;
+                    border: 1px solid #0a84ff;
+                }
+            """
+            button_style = """
+                QPushButton {
+                    background: #2c2c2e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    color: #4da3ff;
+                    font-size: 12px;
+                }
+                QPushButton:hover:enabled {
+                    background: #3a3a3c;
+                }
+                QPushButton:disabled {
+                    color: #5a5a60;
+                }
+            """
+            result_color = "#8e8e93"
+        else:
+            self.search_container.setStyleSheet("""
+                QWidget {
+                    background: #ffffff;
+                    border-radius: 8px;
+                    border: 1px solid #c7c7cc;
+                }
+            """)
+            self.search_input.setStyleSheet("""
+                QLineEdit {
+                    background: transparent;
+                    border: none;
+                    color: #000000;
+                    font-size: 13px;
+                    padding: 0px;
+                    margin: 0px;
+                }
+                QLineEdit::placeholder {
+                    color: #8e8e93;
+                }
+            """)
+            checkbox_style = """
+                QCheckBox {
+                    color: #000000;
+                    font-size: 12px;
+                }
+                QCheckBox::indicator {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 4px;
+                    border: 1px solid #c7c7cc;
+                    background: #ffffff;
+                }
+                QCheckBox::indicator:checked {
+                    background: #007aff;
+                    border: 1px solid #007aff;
+                }
+            """
+            button_style = """
+                QPushButton {
+                    background: #ffffff;
+                    border: 1px solid #c7c7cc;
+                    border-radius: 6px;
+                    color: #007aff;
+                    font-size: 12px;
+                }
+                QPushButton:hover:enabled {
+                    background: #f2f2f7;
+                }
+                QPushButton:disabled {
+                    color: #c7c7cc;
+                }
+            """
+            result_color = "#8e8e93"
+
+        self.only_matches.setStyleSheet(checkbox_style)
+        self.exact_search.setStyleSheet(checkbox_style)
+        self.prev_btn.setStyleSheet(button_style)
+        self.next_btn.setStyleSheet(button_style)
+        self.result_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 12px;
+                color: {result_color};
+                padding: 0 8px;
+            }}
+        """)
 
     def on_search_changed(self):
         text = self.search_input.text()
@@ -908,20 +1193,21 @@ class CheckboxItemDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
+        is_dark = option.palette.color(QPalette.Base).lightness() < 128
         painter.save()
         painter.fillRect(option.rect, option.palette.base())
 
         box_rect = self._checkbox_rect(option)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setPen(QPen(QColor(170, 170, 176), 1))
-        painter.setBrush(QColor(255, 255, 255))
+        painter.setPen(QPen(QColor(90, 90, 96) if is_dark else QColor(170, 170, 176), 1))
+        painter.setBrush(QColor(46, 46, 50) if is_dark else QColor(255, 255, 255))
         painter.drawRect(box_rect)
 
         state = index.data(Qt.CheckStateRole)
         if state == Qt.Checked:
             x = box_rect.x()
             y = box_rect.y()
-            painter.setPen(QPen(QColor(0, 0, 0), 2))
+            painter.setPen(QPen(QColor(242, 242, 247) if is_dark else QColor(0, 0, 0), 2))
             painter.drawLine(x + 3, y + 8, x + 7, y + 12)
             painter.drawLine(x + 7, y + 12, x + 13, y + 4)
 
@@ -1008,8 +1294,8 @@ class SearchHighlightDelegate(QStyledItemDelegate):
         painter.save()
         painter.setClipRect(text_rect)
 
-        # В текущем светлом дизайне текст должен оставаться черным и при выделении строки
-        normal_color = QColor(0, 0, 0)
+        is_dark = getattr(table, "current_theme", "light") == "dark"
+        normal_color = QColor(242, 242, 247) if is_dark else QColor(0, 0, 0)
         painter.setPen(normal_color)
 
         if not matches:
@@ -1028,8 +1314,10 @@ class SearchHighlightDelegate(QStyledItemDelegate):
             matched_part = text[start:end]
             w = fm.horizontalAdvance(matched_part)
             hrect = QRect(x - 1, baseline - fm.ascent() - 1, w + 2, fm.height() + 2)
-            painter.fillRect(hrect, QColor(255, 236, 153))
-            painter.setPen(QColor(186, 140, 0))
+            highlight_fill = QColor(101, 83, 0, 190) if is_dark else QColor(255, 236, 153)
+            highlight_border = QColor(255, 204, 0) if is_dark else QColor(186, 140, 0)
+            painter.fillRect(hrect, highlight_fill)
+            painter.setPen(highlight_border)
             painter.drawRect(hrect)
             painter.setPen(normal_color)
             painter.drawText(x, baseline, matched_part)
@@ -1048,16 +1336,30 @@ class SearchHighlightDelegate(QStyledItemDelegate):
 
         editor = QLineEdit(parent)
         editor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        editor.setStyleSheet("""
-            QLineEdit {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #007aff;
-                border-radius: 8px;
-                padding: 0px 8px;
-                margin: 0px;
-            }
-        """)
+        table = self.parent()
+        is_dark = getattr(table, "current_theme", "light") == "dark"
+        if is_dark:
+            editor.setStyleSheet("""
+                QLineEdit {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    border: 1px solid #0a84ff;
+                    border-radius: 8px;
+                    padding: 0px 8px;
+                    margin: 0px;
+                }
+            """)
+        else:
+            editor.setStyleSheet("""
+                QLineEdit {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #007aff;
+                    border-radius: 8px;
+                    padding: 0px 8px;
+                    margin: 0px;
+                }
+            """)
         return editor
 
     def updateEditorGeometry(self, editor, option, index):
@@ -1074,16 +1376,30 @@ class FrequencyEditDelegate(QStyledItemDelegate):
         editor = QLineEdit(parent)
         editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         editor.setValidator(QIntValidator(0, 2147483647, editor))
-        editor.setStyleSheet("""
-            QLineEdit {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #007aff;
-                border-radius: 8px;
-                padding: 0px 10px;
-                margin: 0px;
-            }
-        """)
+        table = parent.parent() if parent is not None else None
+        is_dark = getattr(table, "current_theme", "light") == "dark"
+        if is_dark:
+            editor.setStyleSheet("""
+                QLineEdit {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    border: 1px solid #0a84ff;
+                    border-radius: 8px;
+                    padding: 0px 10px;
+                    margin: 0px;
+                }
+            """)
+        else:
+            editor.setStyleSheet("""
+                QLineEdit {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #007aff;
+                    border-radius: 8px;
+                    padding: 0px 10px;
+                    margin: 0px;
+                }
+            """)
         return editor
 
     def setEditorData(self, editor, index):
@@ -1129,6 +1445,7 @@ class CheckBoxHeader(QHeaderView):
             super().paintSection(painter, rect, logicalIndex)
             return
 
+        is_dark = self.palette().color(QPalette.Base).lightness() < 128
         size = 16
         x = rect.x() + (rect.width() - size) // 2
         y = rect.y() + (rect.height() - size) // 2
@@ -1138,18 +1455,18 @@ class CheckBoxHeader(QHeaderView):
         painter.setRenderHint(QPainter.Antialiasing, True)
 
         # Полностью рисуем фон секции вручную, чтобы не было системных артефактов справа
-        painter.fillRect(rect, QColor(242, 242, 247))
-        painter.setPen(QPen(QColor(199, 199, 204), 1))
+        painter.fillRect(rect, QColor(44, 44, 46) if is_dark else QColor(242, 242, 247))
+        painter.setPen(QPen(QColor(75, 75, 80) if is_dark else QColor(199, 199, 204), 1))
         painter.drawLine(rect.bottomLeft(), rect.bottomRight())
         painter.drawLine(rect.topRight(), rect.bottomRight())
 
         # Белый фон и четкая рамка, чтобы чекбокс был всегда заметен
-        painter.setPen(QPen(QColor(150, 150, 156), 1))
-        painter.setBrush(QColor(255, 255, 255))
+        painter.setPen(QPen(QColor(102, 102, 108) if is_dark else QColor(150, 150, 156), 1))
+        painter.setBrush(QColor(46, 46, 50) if is_dark else QColor(255, 255, 255))
         painter.drawRect(box_rect)
 
         if self._is_checked:
-            pen = QPen(QColor(0, 0, 0), 2)
+            pen = QPen(QColor(242, 242, 247) if is_dark else QColor(0, 0, 0), 2)
             painter.setPen(pen)
             painter.drawLine(x + 3, y + 8, x + 7, y + 12)
             painter.drawLine(x + 7, y + 12, x + 13, y + 4)
@@ -1264,6 +1581,7 @@ class MainPhraseTable(QTableWidget):
         self.checkbox_delegate = None
         self.search_delegate = None
         self.frequency_delegate = None
+        self.current_theme = "light"
         self.default_sort_column = 2
         self.default_sort_order = Qt.DescendingOrder
         self.setup_ui()
@@ -1342,6 +1660,132 @@ class MainPhraseTable(QTableWidget):
         self.setAlternatingRowColors(False)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().setVisible(False)
+        self.apply_theme("light")
+
+    def apply_theme(self, theme: str):
+        self.current_theme = "dark" if theme == "dark" else "light"
+        if theme == "dark":
+            self.setStyleSheet("""
+                QTableWidget {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    gridline-color: #3a3a3c;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    font-family: Arial;
+                    font-size: 13px;
+                }
+                QTableWidget::item {
+                    padding: 6px;
+                    border-bottom: 1px solid #2c2c2e;
+                }
+                QTableWidget::item:selected {
+                    background-color: #3a3a3c;
+                    color: #ffffff;
+                }
+                QTableWidget::item:hover {
+                    background-color: #2b2b30;
+                }
+                QHeaderView::section {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    padding: 8px;
+                    border: none;
+                    border-bottom: 1px solid #4b4b50;
+                    font-weight: 600;
+                }
+                QScrollBar:vertical {
+                    background: #2c2c2e;
+                    width: 12px;
+                    border-radius: 6px;
+                }
+                QScrollBar::handle:vertical {
+                    background: #636366;
+                    border-radius: 6px;
+                    min-height: 30px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: #7a7a7f;
+                }
+            """)
+            self.refresh_theme_visuals()
+            return
+
+        self.setStyleSheet("""
+            QTableWidget {
+                background-color: #ffffff;
+                color: #000000;
+                gridline-color: #e5e5ea;
+                border: 1px solid #c7c7cc;
+                border-radius: 8px;
+                font-family: Arial;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #f2f2f7;
+            }
+            QTableWidget::item:selected {
+                background-color: #e5e5ea;
+                color: #000000;
+            }
+            QTableWidget::item:hover {
+                background-color: #f2f2f7;
+            }
+            QHeaderView::section {
+                background-color: #f2f2f7;
+                color: #000000;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid #c7c7cc;
+                font-weight: 600;
+            }
+            QScrollBar:vertical {
+                background: #f2f2f7;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c7c7cc;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+                QScrollBar::handle:vertical:hover {
+                    background: #a0a0a5;
+                }
+            """)
+        self.refresh_theme_visuals()
+
+    def get_frequency_text_color(self, freq: int) -> QColor:
+        is_dark = self.current_theme == "dark"
+        if freq >= 100000:
+            return QColor(255, 69, 58) if is_dark else QColor(255, 59, 48)
+        if freq >= 10000:
+            return QColor(255, 159, 10) if is_dark else QColor(255, 149, 0)
+        if freq >= 1000:
+            return QColor(255, 214, 10) if is_dark else QColor(255, 204, 0)
+        if freq >= 100:
+            return QColor(48, 209, 88) if is_dark else QColor(52, 199, 36)
+        return QColor(174, 174, 178) if is_dark else QColor(142, 142, 147)
+
+    def refresh_theme_visuals(self):
+        phrase_fg = QBrush(QColor(242, 242, 247) if self.current_theme == "dark" else QColor(0, 0, 0))
+        for row in range(self.rowCount()):
+            phrase_item = self.item(row, 1)
+            freq_item = self.item(row, 2)
+            if not phrase_item or not freq_item:
+                continue
+
+            try:
+                freq = int(freq_item.text())
+            except Exception:
+                freq = 0
+
+            phrase_item.setBackground(QBrush(self.get_frequency_color(freq)))
+            if hasattr(phrase_item, "setForeground"):
+                phrase_item.setForeground(phrase_fg)
+            if hasattr(freq_item, "setForeground"):
+                freq_item.setForeground(QBrush(self.get_frequency_text_color(freq)))
 
     def _resolve_active_sort(self) -> Tuple[int, Qt.SortOrder]:
         header = self.horizontalHeader()
@@ -1360,29 +1804,54 @@ class MainPhraseTable(QTableWidget):
     def contextMenuEvent(self, event):
         """Создание контекстного меню в стиле macOS"""
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #c7c7cc;
-                border-radius: 8px;
-                padding: 5px;
-                font-family: Arial;
-                font-size: 13px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #e5e5ea;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #e5e5ea;
-                margin: 5px 0;
-            }
-        """)
+        if getattr(self, "current_theme", "light") == "dark":
+            menu.setStyleSheet("""
+                QMenu {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 5px;
+                    font-family: Arial;
+                    font-size: 13px;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                    border-radius: 4px;
+                }
+                QMenu::item:selected {
+                    background-color: #3a3a3c;
+                }
+                QMenu::separator {
+                    height: 1px;
+                    background: #4b4b50;
+                    margin: 5px 0;
+                }
+            """)
+        else:
+            menu.setStyleSheet("""
+                QMenu {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c7c7cc;
+                    border-radius: 8px;
+                    padding: 5px;
+                    font-family: Arial;
+                    font-size: 13px;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                    border-radius: 4px;
+                }
+                QMenu::item:selected {
+                    background-color: #e5e5ea;
+                }
+                QMenu::separator {
+                    height: 1px;
+                    background: #e5e5ea;
+                    margin: 5px 0;
+                }
+            """)
 
         current_row = self.currentRow()
 
@@ -1772,23 +2241,30 @@ class MainPhraseTable(QTableWidget):
             phrase_item.setData(Qt.UserRole, source_index)
             color = self.get_frequency_color(freq)
             phrase_item.setBackground(QBrush(color))
+            is_dark = getattr(self, "current_theme", "light") == "dark"
+            if hasattr(phrase_item, "setForeground"):
+                phrase_item.setForeground(
+                    QBrush(QColor(242, 242, 247) if is_dark else QColor(0, 0, 0))
+                )
 
             self.setItem(i, 1, phrase_item)
 
             freq_item = FrequencyTableWidgetItem(freq)
             freq_item.setData(Qt.UserRole, source_index)
             freq_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-            if freq >= 100000:
-                freq_item.setForeground(QBrush(QColor(255, 59, 48)))
-            elif freq >= 10000:
-                freq_item.setForeground(QBrush(QColor(255, 149, 0)))
-            elif freq >= 1000:
-                freq_item.setForeground(QBrush(QColor(255, 204, 0)))
-            elif freq >= 100:
-                freq_item.setForeground(QBrush(QColor(52, 199, 36)))
+            if hasattr(self, "get_frequency_text_color"):
+                freq_item.setForeground(QBrush(self.get_frequency_text_color(freq)))
             else:
-                freq_item.setForeground(QBrush(QColor(142, 142, 147)))
+                if freq >= 100000:
+                    freq_item.setForeground(QBrush(QColor(255, 59, 48)))
+                elif freq >= 10000:
+                    freq_item.setForeground(QBrush(QColor(255, 149, 0)))
+                elif freq >= 1000:
+                    freq_item.setForeground(QBrush(QColor(255, 204, 0)))
+                elif freq >= 100:
+                    freq_item.setForeground(QBrush(QColor(52, 199, 36)))
+                else:
+                    freq_item.setForeground(QBrush(QColor(142, 142, 147)))
 
             self.setItem(i, 2, freq_item)
 
@@ -1808,6 +2284,18 @@ class MainPhraseTable(QTableWidget):
             return self.search_text.lower() in phrase.lower()
 
     def get_frequency_color(self, freq: int) -> QColor:
+        if getattr(self, "current_theme", "light") == "dark":
+            if freq >= 100000:
+                return QColor(62, 24, 26)
+            elif freq >= 10000:
+                return QColor(66, 44, 20)
+            elif freq >= 1000:
+                return QColor(64, 56, 20)
+            elif freq >= 100:
+                return QColor(24, 62, 30)
+            else:
+                return QColor(28, 28, 30)
+
         if freq >= 100000:
             return QColor(255, 235, 235)
         elif freq >= 10000:
@@ -2014,7 +2502,9 @@ class StopWordsWidget(QWidget):
         super().__init__()
         self.stop_words = set()
         self.history = HistoryManager()
+        self.current_theme = "light"
         self.setup_ui()
+        self.apply_theme("light")
         self.history.set_initial_state(tuple())
 
     def setup_ui(self):
@@ -2022,49 +2512,18 @@ class StopWordsWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        header = QLabel("Стоп-слова")
-        header.setFont(QFont("Arial", 15, QFont.Bold))
-        header.setStyleSheet("color: #000000;")
-        header.setContentsMargins(4, 0, 0, 0)
-        header.setIndent(2)
-        layout.addWidget(header)
+        self.header_label = QLabel("Стоп-слова")
+        self.header_label.setFont(QFont("Arial", 15, QFont.Bold))
+        self.header_label.setContentsMargins(4, 0, 0, 0)
+        self.header_label.setIndent(2)
+        layout.addWidget(self.header_label)
 
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Введите стоп-слово...")
         self.input_field.returnPressed.connect(self.add_stop_word)
-        self.input_field.setStyleSheet("""
-            QLineEdit {
-                padding: 6px;
-                border: 1px solid #c7c7cc;
-                border-radius: 6px;
-                background-color: #ffffff;
-                font-size: 13px;
-                color: #000000;
-            }
-            QLineEdit:focus {
-                border: 1px solid #007aff;
-            }
-        """)
         layout.addWidget(self.input_field)
 
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #ffffff;
-                border: 1px solid #c7c7cc;
-                border-radius: 6px;
-                padding: 5px;
-                font-size: 13px;
-                color: #000000;
-            }
-            QListWidget::item {
-                padding: 4px;
-            }
-            QListWidget::item:selected {
-                background-color: #e5e5ea;
-                color: #000000;
-            }
-        """)
         layout.addWidget(self.list_widget)
 
         btn_layout = QHBoxLayout()
@@ -2089,6 +2548,79 @@ class StopWordsWidget(QWidget):
         layout.addLayout(btn_layout)
 
         self.setLayout(layout)
+
+    def apply_theme(self, theme: str):
+        self.current_theme = "dark" if theme == "dark" else "light"
+        if theme == "dark":
+            self.header_label.setStyleSheet("color: #f2f2f7;")
+            self.input_field.setStyleSheet("""
+                QLineEdit {
+                    padding: 6px;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    background-color: #1c1c1e;
+                    font-size: 13px;
+                    color: #f2f2f7;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #0a84ff;
+                }
+            """)
+            self.list_widget.setStyleSheet("""
+                QListWidget {
+                    background-color: #1c1c1e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    padding: 5px;
+                    font-size: 13px;
+                    color: #f2f2f7;
+                }
+                QListWidget::item {
+                    padding: 4px;
+                }
+                QListWidget::item:selected {
+                    background-color: #3a3a3c;
+                    color: #ffffff;
+                }
+            """)
+            button_theme = "dark"
+        else:
+            self.header_label.setStyleSheet("color: #000000;")
+            self.input_field.setStyleSheet("""
+                QLineEdit {
+                    padding: 6px;
+                    border: 1px solid #c7c7cc;
+                    border-radius: 6px;
+                    background-color: #ffffff;
+                    font-size: 13px;
+                    color: #000000;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #007aff;
+                }
+            """)
+            self.list_widget.setStyleSheet("""
+                QListWidget {
+                    background-color: #ffffff;
+                    border: 1px solid #c7c7cc;
+                    border-radius: 6px;
+                    padding: 5px;
+                    font-size: 13px;
+                    color: #000000;
+                }
+                QListWidget::item {
+                    padding: 4px;
+                }
+                QListWidget::item:selected {
+                    background-color: #e5e5ea;
+                    color: #000000;
+                }
+            """)
+            button_theme = "light"
+
+        for btn in (self.load_btn, self.remove_btn, self.clear_btn, self.copy_btn):
+            if hasattr(btn, "apply_theme"):
+                btn.apply_theme(button_theme)
 
     def add_stop_word(self):
         word = self.input_field.text().strip().lower()
@@ -2187,7 +2719,9 @@ class GroupingWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.groups = {}
+        self.current_theme = "light"
         self.setup_ui()
+        self.apply_theme("light")
 
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -2196,12 +2730,11 @@ class GroupingWidget(QWidget):
 
         header_layout = QHBoxLayout()
 
-        header = QLabel("Группировка")
-        header.setFont(QFont("Arial", 15, QFont.Bold))
-        header.setStyleSheet("color: #000000;")
-        header.setContentsMargins(4, 0, 0, 0)
-        header.setIndent(2)
-        header_layout.addWidget(header)
+        self.header_label = QLabel("Группировка")
+        self.header_label.setFont(QFont("Arial", 15, QFont.Bold))
+        self.header_label.setContentsMargins(4, 0, 0, 0)
+        self.header_label.setIndent(2)
+        header_layout.addWidget(self.header_label)
 
         header_layout.addStretch()
 
@@ -2213,6 +2746,48 @@ class GroupingWidget(QWidget):
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Группа / Фраза", "Частотность"])
+        layout.addWidget(self.tree)
+
+        self.setLayout(layout)
+
+    def apply_theme(self, theme: str):
+        self.current_theme = "dark" if theme == "dark" else "light"
+        if theme == "dark":
+            self.header_label.setStyleSheet("color: #f2f2f7;")
+            self.tree.setStyleSheet("""
+                QTreeWidget {
+                    background-color: #1c1c1e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    padding: 5px;
+                    font-size: 13px;
+                    color: #f2f2f7;
+                }
+                QTreeWidget::item {
+                    padding: 4px;
+                }
+                QTreeWidget::item:selected {
+                    background-color: #3a3a3c;
+                    color: #ffffff;
+                }
+                QHeaderView::section {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    font-family: Arial;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    padding-left: 10px;
+                    padding-right: 6px;
+                    border: none;
+                    border-bottom: 1px solid #4b4b50;
+                    font-weight: 600;
+                }
+            """)
+            if hasattr(self.export_btn, "apply_theme"):
+                self.export_btn.apply_theme("dark")
+            return
+
+        self.header_label.setStyleSheet("color: #000000;")
         self.tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #ffffff;
@@ -2242,9 +2817,8 @@ class GroupingWidget(QWidget):
                 font-weight: 600;
             }
         """)
-        layout.addWidget(self.tree)
-
-        self.setLayout(layout)
+        if hasattr(self.export_btn, "apply_theme"):
+            self.export_btn.apply_theme("light")
 
     def update_groups(self, phrases: List[Tuple[str, int]]):
         processor = PhraseProcessor()
@@ -2307,6 +2881,7 @@ class FolderColorDelegate(QStyledItemDelegate):
         color_hex = index.data(self.COLOR_ROLE)
         selected = bool(option.state & QStyle.State_Selected)
         hover = bool(option.state & QStyle.State_MouseOver)
+        is_dark = option.palette.color(QPalette.Base).lightness() < 128
         bg = None
 
         if color_hex:
@@ -2319,9 +2894,9 @@ class FolderColorDelegate(QStyledItemDelegate):
                 bg = None
         elif selected:
             # Для обычных строк (фраз) рисуем свое серое выделение без системной синей плашки слева
-            bg = QColor(229, 229, 234)
+            bg = QColor(58, 58, 60) if is_dark else QColor(229, 229, 234)
         elif hover and not selected:
-            bg = QColor(242, 242, 247)
+            bg = QColor(44, 44, 46) if is_dark else QColor(242, 242, 247)
 
         style_option = QStyleOptionViewItem(option)
 
@@ -2358,7 +2933,9 @@ class FoldersWidget(QWidget):
         super().__init__()
         self.folders = {}
         self.history = HistoryManager()
+        self.current_theme = "light"
         self.setup_ui()
+        self.apply_theme("light")
         self.history.set_initial_state({})
 
     def setup_ui(self):
@@ -2368,17 +2945,134 @@ class FoldersWidget(QWidget):
 
         header_layout = QHBoxLayout()
 
-        header = QLabel("Папки")
-        header.setFont(QFont("Arial", 15, QFont.Bold))
-        header.setStyleSheet("color: #000000;")
-        header.setContentsMargins(4, 0, 0, 0)
-        header.setIndent(2)
-        header_layout.addWidget(header)
+        self.header_label = QLabel("Папки")
+        self.header_label.setFont(QFont("Arial", 15, QFont.Bold))
+        self.header_label.setContentsMargins(4, 0, 0, 0)
+        self.header_label.setIndent(2)
+        header_layout.addWidget(self.header_label)
 
         header_layout.addStretch()
 
         self.new_folder_btn = ModernButton("Новая папка")
         self.new_folder_btn.clicked.connect(self.create_folder)
+        header_layout.addWidget(self.new_folder_btn)
+
+        self.export_btn = ModernButton("Экспорт")
+        self.export_btn.clicked.connect(self.export_folders)
+        header_layout.addWidget(self.export_btn)
+
+        layout.addLayout(header_layout)
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Папка / Фраза", "Частотность"])
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setMouseTracking(True)
+        self.tree.viewport().setMouseTracking(True)
+        self.tree.viewport().installEventFilter(self)
+        self.tree.setIndentation(16)
+        self.tree.setItemDelegate(FolderColorDelegate(self.tree))
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tree.header().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.tree.setColumnWidth(1, 140)
+
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.show_context_menu)
+
+        self.tree.setDragDropMode(QAbstractItemView.InternalMove)
+        self.tree.setDefaultDropAction(Qt.MoveAction)
+
+        layout.addWidget(self.tree)
+
+        self.setLayout(layout)
+
+    def apply_theme(self, theme: str):
+        self.current_theme = "dark" if theme == "dark" else "light"
+        if theme == "dark":
+            self.header_label.setStyleSheet("color: #f2f2f7;")
+            self.new_folder_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #0a84ff;
+                    color: #ffffff;
+                    border: 1px solid #0a84ff;
+                    padding: 6px 14px;
+                    border-radius: 10px;
+                    font-weight: 700;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #339bff;
+                }
+                QPushButton:pressed {
+                    background-color: #0066d1;
+                }
+            """)
+            self.export_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    padding: 6px 14px;
+                    border-radius: 10px;
+                    font-weight: 700;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #3a3a3c;
+                    border-color: #5a5a60;
+                }
+                QPushButton:pressed {
+                    background-color: #48484a;
+                }
+            """)
+            self.tree.setStyleSheet("""
+                QTreeWidget {
+                    background-color: #1c1c1e;
+                    alternate-background-color: #242428;
+                    border: 1px solid #4b4b50;
+                    border-radius: 10px;
+                    padding: 8px;
+                    font-size: 13px;
+                    color: #f2f2f7;
+                    outline: 0;
+                    show-decoration-selected: 1;
+                }
+                QTreeWidget::item {
+                    padding: 6px 8px;
+                    border-radius: 0px;
+                }
+                QTreeWidget::item:hover {
+                    background-color: transparent;
+                }
+                QTreeWidget::item:selected,
+                QTreeWidget::item:selected:active,
+                QTreeWidget::item:selected:!active {
+                    background-color: #3a3a3c;
+                    color: #ffffff;
+                }
+                QHeaderView::section {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    font-family: Arial;
+                    padding: 8px 8px 8px 12px;
+                    border: none;
+                    border-bottom: 1px solid #4b4b50;
+                    font-weight: 700;
+                }
+                QTreeView::branch:has-siblings:!adjoins-item {
+                    border-image: none;
+                    border-left: 1px solid #4b4b50;
+                }
+                QTreeView::branch:selected {
+                    background: transparent;
+                }
+            """)
+            return
+
+        self.header_label.setStyleSheet("color: #000000;")
         self.new_folder_btn.setStyleSheet("""
             QPushButton {
                 background-color: #0a84ff;
@@ -2396,10 +3090,6 @@ class FoldersWidget(QWidget):
                 background-color: #0066d1;
             }
         """)
-        header_layout.addWidget(self.new_folder_btn)
-
-        self.export_btn = ModernButton("Экспорт")
-        self.export_btn.clicked.connect(self.export_folders)
         self.export_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff;
@@ -2418,12 +3108,6 @@ class FoldersWidget(QWidget):
                 background-color: #e9edf5;
             }
         """)
-        header_layout.addWidget(self.export_btn)
-
-        layout.addLayout(header_layout)
-
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Папка / Фраза", "Частотность"])
         self.tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #ffffff;
@@ -2466,29 +3150,43 @@ class FoldersWidget(QWidget):
                 background: transparent;
             }
         """)
-        self.tree.setAlternatingRowColors(True)
-        self.tree.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.tree.setUniformRowHeights(True)
-        self.tree.setMouseTracking(True)
-        self.tree.viewport().setMouseTracking(True)
-        self.tree.viewport().installEventFilter(self)
-        self.tree.setIndentation(16)
-        self.tree.setItemDelegate(FolderColorDelegate(self.tree))
-        self.tree.header().setStretchLastSection(False)
-        self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.tree.header().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.tree.setColumnWidth(1, 140)
 
-        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.tree.customContextMenuRequested.connect(self.show_context_menu)
-
-        self.tree.setDragDropMode(QAbstractItemView.InternalMove)
-        self.tree.setDefaultDropAction(Qt.MoveAction)
-
-        layout.addWidget(self.tree)
-
-        self.setLayout(layout)
+    def _menu_style(self) -> str:
+        if self.current_theme == "dark":
+            return """
+                QMenu {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 5px;
+                    font-size: 13px;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                    border-radius: 4px;
+                }
+                QMenu::item:selected {
+                    background-color: #3a3a3c;
+                }
+            """
+        return """
+            QMenu {
+                background-color: #ffffff;
+                color: #000000;
+                border: 1px solid #c7c7cc;
+                border-radius: 8px;
+                padding: 5px;
+                font-size: 13px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #e5e5ea;
+            }
+        """
 
     def eventFilter(self, obj, event):
         if obj is self.tree.viewport() and event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
@@ -2569,23 +3267,7 @@ class FoldersWidget(QWidget):
         if len(items) == 1 and items[0].parent() is None:
             folder_name = items[0].text(0).split(" (")[0]
             menu = QMenu(self)
-            menu.setStyleSheet("""
-                QMenu {
-                    background-color: #ffffff;
-                    color: #000000;
-                    border: 1px solid #c7c7cc;
-                    border-radius: 8px;
-                    padding: 5px;
-                    font-size: 13px;
-                }
-                QMenu::item {
-                    padding: 6px 20px;
-                    border-radius: 4px;
-                }
-                QMenu::item:selected {
-                    background-color: #e5e5ea;
-                }
-            """)
+            menu.setStyleSheet(self._menu_style())
 
             rename_action = menu.addAction("Переименовать папку")
             rename_action.triggered.connect(lambda: self.rename_folder(folder_name))
@@ -2620,23 +3302,7 @@ class FoldersWidget(QWidget):
 
             if selected:
                 menu = QMenu(self)
-                menu.setStyleSheet("""
-                    QMenu {
-                        background-color: #ffffff;
-                        color: #000000;
-                        border: 1px solid #c7c7cc;
-                        border-radius: 8px;
-                        padding: 5px;
-                        font-size: 13px;
-                    }
-                    QMenu::item {
-                        padding: 6px 20px;
-                        border-radius: 4px;
-                    }
-                    QMenu::item:selected {
-                        background-color: #e5e5ea;
-                    }
-                """)
+                menu.setStyleSheet(self._menu_style())
 
                 copy_back = menu.addAction("Копировать обратно")
                 copy_back.triggered.connect(lambda: self.phrases_back.emit(selected, False))
@@ -2709,12 +3375,15 @@ class FoldersWidget(QWidget):
         phrase_font = QFont("Arial", 12)
         default_folder_color = QColor(36, 46, 66)
         folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
+        is_dark = getattr(self, "current_theme", "light") == "dark"
+        text_color = QColor(242, 242, 247) if is_dark else QColor(0, 0, 0)
+        phrase_color = QColor(230, 230, 235) if is_dark else QColor(34, 34, 38)
 
         for folder_name, folder in self.folders.items():
             folder_color = QColor(folder.color) if getattr(folder, "color", None) else default_folder_color
             if not folder_color.isValid():
                 folder_color = default_folder_color
-            folder_fg = QBrush(QColor(0, 0, 0))
+            folder_fg = QBrush(text_color)
             folder_bg = None
             if getattr(folder, "color", None):
                 tint_color = QColor(folder_color)
@@ -2741,7 +3410,7 @@ class FoldersWidget(QWidget):
                 phrase_item.setText(1, str(freq))
                 phrase_item.setFont(0, phrase_font)
                 phrase_item.setFont(1, phrase_font)
-                phrase_item.setForeground(0, QBrush(QColor(34, 34, 38)))
+                phrase_item.setForeground(0, QBrush(phrase_color))
 
                 if freq >= 100000:
                     phrase_item.setForeground(1, QBrush(QColor(255, 59, 48)))
@@ -3153,6 +3822,8 @@ class MainWindow(QMainWindow):
     def __init__(self, license_manager: LicenseManager):
         super().__init__()
         self.license_manager = license_manager
+        self.theme_mode = "system"
+        self.current_theme = "light"
         self.phrase_lists = {}
         self.global_stop_words = set()
         self.global_folders = {}
@@ -3163,7 +3834,8 @@ class MainWindow(QMainWindow):
         self.stop_words_widget = StopWordsWidget()
         self.setup_ui()
         self.setup_shortcuts()
-        self.setup_style()
+        self.setup_native_menu()
+        self.apply_theme(self.theme_mode)
         self.phrase_tabs.currentChanged.connect(self.on_phrase_tab_changed)
         self.phrase_tabs.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.phrase_tabs.tabBar().customContextMenuRequested.connect(self.show_tab_context_menu)
@@ -3188,8 +3860,8 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
         central_widget.setLayout(main_layout)
 
-        toolbar_widget = QWidget()
-        toolbar_widget.setStyleSheet("""
+        self.toolbar_widget = QWidget()
+        self.toolbar_widget.setStyleSheet("""
             QWidget {
                 background-color: #f2f2f7;
                 border-bottom: 1px solid #c7c7cc;
@@ -3198,6 +3870,17 @@ class MainWindow(QMainWindow):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setContentsMargins(10, 5, 10, 5)
         toolbar_layout.setSpacing(8)
+
+        self.settings_btn = QToolButton()
+        self.settings_btn.setObjectName("settingsToolbarButton")
+        self.settings_btn.setToolTip("Настройки")
+        self.settings_btn.setText("⚙")
+        self.settings_btn.setFont(QFont("Arial", 15, QFont.Bold))
+        self.settings_btn.setFixedSize(34, 30)
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setPopupMode(QToolButton.InstantPopup)
+        self._build_settings_menu()
+        toolbar_layout.addWidget(self.settings_btn)
 
         self.load_btn = ModernButton("Загрузить")
         self.load_btn.clicked.connect(self.load_files)
@@ -3226,8 +3909,8 @@ class MainWindow(QMainWindow):
 
         toolbar_layout.addStretch()
 
-        counter_widget = QWidget()
-        counter_widget.setStyleSheet("""
+        self.counter_widget = QWidget()
+        self.counter_widget.setStyleSheet("""
             QWidget {
                 background: #ffffff;
                 border: 1px solid #c7c7cc;
@@ -3249,12 +3932,12 @@ class MainWindow(QMainWindow):
         self.filtered_count_label.setStyleSheet("color: #8e8e93;")
         counter_layout.addWidget(self.filtered_count_label)
 
-        counter_widget.setLayout(counter_layout)
-        toolbar_layout.addWidget(counter_widget)
+        self.counter_widget.setLayout(counter_layout)
+        toolbar_layout.addWidget(self.counter_widget)
 
-        toolbar_widget.setLayout(toolbar_layout)
-        toolbar_widget.setMaximumHeight(40)
-        main_layout.addWidget(toolbar_widget)
+        self.toolbar_widget.setLayout(toolbar_layout)
+        self.toolbar_widget.setMaximumHeight(40)
+        main_layout.addWidget(self.toolbar_widget)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(1)
@@ -3272,12 +3955,12 @@ class MainWindow(QMainWindow):
         header_layout = QHBoxLayout()
         header_layout.setSpacing(5)
 
-        editor_label = QLabel("Фразы")
-        editor_label.setFont(QFont("Arial", 13, QFont.Bold))
-        editor_label.setStyleSheet("color: #000000;")
-        editor_label.setContentsMargins(4, 0, 0, 0)
-        editor_label.setIndent(2)
-        header_layout.addWidget(editor_label)
+        self.editor_label = QLabel("Фразы")
+        self.editor_label.setFont(QFont("Arial", 13, QFont.Bold))
+        self.editor_label.setStyleSheet("color: #000000;")
+        self.editor_label.setContentsMargins(4, 0, 0, 0)
+        self.editor_label.setIndent(2)
+        header_layout.addWidget(self.editor_label)
 
         self.add_btn = AddButton()
         self.add_btn.clicked.connect(self.add_phrase)
@@ -3482,6 +4165,19 @@ class MainWindow(QMainWindow):
             shortcut.activated.connect(handler)
             self._shortcuts.append(shortcut)
 
+    def setup_native_menu(self):
+        """Настройки в системной строке меню macOS (и обычном menubar на других ОС)."""
+        menu_bar = self.menuBar()
+        menu_bar.setNativeMenuBar(True)
+
+        self.app_menu = menu_bar.addMenu("PhraseTools")
+
+        self.preferences_action = QAction("Настройки…", self)
+        self.preferences_action.setMenuRole(QAction.PreferencesRole)
+        self.preferences_action.setShortcut(QKeySequence("Ctrl+,"))
+        self.preferences_action.triggered.connect(self.open_settings)
+        self.app_menu.addAction(self.preferences_action)
+
     def perform_undo(self):
         if self._undo_redo_text_focus(redo=False):
             return
@@ -3605,7 +4301,570 @@ class MainWindow(QMainWindow):
             return True
         return False
 
+    def _build_settings_menu(self):
+        self.settings_menu = QMenu(self.settings_btn)
+        self.settings_menu.setObjectName("settingsToolbarMenu")
+
+        theme_section = self.settings_menu.addSection("Тема")
+        theme_section.setEnabled(False)
+
+        self.theme_system_action = self.settings_menu.addAction("Системная")
+        self.theme_system_action.setCheckable(True)
+        self.theme_system_action.triggered.connect(lambda: self.apply_theme("system"))
+
+        self.theme_light_action = self.settings_menu.addAction("Светлая")
+        self.theme_light_action.setCheckable(True)
+        self.theme_light_action.triggered.connect(lambda: self.apply_theme("light"))
+
+        self.theme_dark_action = self.settings_menu.addAction("Темная")
+        self.theme_dark_action.setCheckable(True)
+        self.theme_dark_action.triggered.connect(lambda: self.apply_theme("dark"))
+
+        self.settings_menu.addSeparator()
+        self.open_settings_action = self.settings_menu.addAction("Открыть настройки…")
+        self.open_settings_action.triggered.connect(self.open_settings)
+
+        self.settings_btn.setMenu(self.settings_menu)
+        self._sync_theme_menu_state()
+
+    def _sync_theme_menu_state(self):
+        if not hasattr(self, "theme_system_action"):
+            return
+        self.theme_system_action.setChecked(self.theme_mode == "system")
+        self.theme_light_action.setChecked(self.theme_mode == "light")
+        self.theme_dark_action.setChecked(self.theme_mode == "dark")
+
+    def _refresh_tab_widget_style(self, tab_widget: QTabWidget):
+        if not tab_widget:
+            return
+        style = tab_widget.style()
+        if style:
+            style.unpolish(tab_widget)
+            style.polish(tab_widget)
+        tab_bar = tab_widget.tabBar() if hasattr(tab_widget, "tabBar") else None
+        if tab_bar:
+            bar_style = tab_bar.style()
+            if bar_style:
+                bar_style.unpolish(tab_bar)
+                bar_style.polish(tab_bar)
+            tab_bar.update()
+        tab_widget.update()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_theme_post_show_applied", False):
+            self._theme_post_show_applied = True
+            QTimer.singleShot(0, lambda: self.apply_theme(self.theme_mode))
+
+    def open_settings(self):
+        dialog = SettingsDialog(self.theme_mode, self.current_theme, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.apply_theme(dialog.selected_theme_mode())
+
+    def _is_system_dark_theme(self) -> bool:
+        try:
+            if sys.platform == "darwin":
+                mode = QSettings("Apple Global Domain", "").value("AppleInterfaceStyle")
+                return str(mode).strip().lower() == "dark"
+        except Exception:
+            pass
+
+        try:
+            if sys.platform.startswith("win"):
+                import winreg
+                with winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                ) as key:
+                    apps_use_light_theme = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                    return int(apps_use_light_theme) == 0
+        except Exception:
+            pass
+
+        gtk_theme = os.environ.get("GTK_THEME", "")
+        if isinstance(gtk_theme, str) and "dark" in gtk_theme.lower():
+            return True
+
+        app = QApplication.instance()
+        if app:
+            return app.palette().color(QPalette.Window).lightness() < 128
+        return False
+
+    def _resolve_theme(self) -> str:
+        if self.theme_mode == "dark":
+            return "dark"
+        if self.theme_mode == "light":
+            return "light"
+        return "dark" if self._is_system_dark_theme() else "light"
+
+    def _build_palette(self, theme: str) -> QPalette:
+        palette = QPalette()
+        if theme == "dark":
+            palette.setColor(QPalette.Window, QColor(22, 22, 24))
+            palette.setColor(QPalette.WindowText, QColor(242, 242, 247))
+            palette.setColor(QPalette.Base, QColor(28, 28, 30))
+            palette.setColor(QPalette.AlternateBase, QColor(36, 36, 40))
+            palette.setColor(QPalette.Text, QColor(242, 242, 247))
+            palette.setColor(QPalette.Button, QColor(44, 44, 46))
+            palette.setColor(QPalette.ButtonText, QColor(242, 242, 247))
+            palette.setColor(QPalette.Highlight, QColor(10, 132, 255))
+            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+            palette.setColor(QPalette.ToolTipBase, QColor(44, 44, 46))
+            palette.setColor(QPalette.ToolTipText, QColor(242, 242, 247))
+            return palette
+
+        palette.setColor(QPalette.Window, QColor(242, 242, 247))
+        palette.setColor(QPalette.WindowText, QColor(0, 0, 0))
+        palette.setColor(QPalette.Base, QColor(255, 255, 255))
+        palette.setColor(QPalette.AlternateBase, QColor(242, 242, 247))
+        palette.setColor(QPalette.Text, QColor(0, 0, 0))
+        palette.setColor(QPalette.Button, QColor(255, 255, 255))
+        palette.setColor(QPalette.ButtonText, QColor(0, 0, 0))
+        palette.setColor(QPalette.Highlight, QColor(0, 122, 255))
+        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+        palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 255))
+        palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
+        return palette
+
+    def apply_theme(self, mode: Optional[str] = None):
+        if mode in {"light", "dark", "system"}:
+            self.theme_mode = mode
+        self._sync_theme_menu_state()
+
+        self.current_theme = self._resolve_theme()
+        app = QApplication.instance()
+        if app:
+            app.setPalette(self._build_palette(self.current_theme))
+
+        self.setup_style()
+        self._apply_layout_theme()
+        self._apply_child_theme()
+
+    def _apply_layout_theme(self):
+        is_dark = self.current_theme == "dark"
+        if is_dark:
+            self.toolbar_widget.setStyleSheet("""
+                QWidget {
+                    background-color: #1f1f23;
+                    border-bottom: 1px solid #4b4b50;
+                }
+            """)
+            self.counter_widget.setStyleSheet("""
+                QWidget {
+                    background: #2c2c2e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 6px;
+                    padding: 2px 6px;
+                }
+            """)
+            self.phrase_count_label.setStyleSheet("color: #f2f2f7;")
+            self.filtered_count_label.setStyleSheet("color: #a1a1a6;")
+            self.editor_label.setStyleSheet("color: #f2f2f7;")
+            self.status_bar.setStyleSheet("""
+                QStatusBar {
+                    background-color: #1f1f23;
+                    color: #a1a1a6;
+                    border-top: 1px solid #4b4b50;
+                    font-size: 12px;
+                }
+            """)
+            self.new_list_plus_btn.setStyleSheet("""
+                QPushButton#newListPlusButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    border-radius: 12px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    padding: 0px;
+                }
+                QPushButton#newListPlusButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QPushButton#newListPlusButton:pressed {
+                    background-color: #48484a;
+                }
+            """)
+            self.phrase_tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    background-color: #1c1c1e;
+                    border: 1px solid #4b4b50;
+                    border-radius: 10px;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    background-color: #2c2c2e;
+                    color: #b8b8bf;
+                    font-family: Arial;
+                    border: 1px solid #4b4b50;
+                    border-bottom: none;
+                    border-top-left-radius: 8px;
+                    border-top-right-radius: 8px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    margin-left: 0px;
+                    margin-right: 0px;
+                    min-height: 20px;
+                    text-align: left;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #3a3a3c;
+                }
+                QTabBar::tab:selected {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    font-weight: 600;
+                    border-color: #5a5a60;
+                }
+            """)
+            self.tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #4b4b50;
+                    background-color: #1c1c1e;
+                    border-radius: 10px;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    background-color: #2c2c2e;
+                    color: #b8b8bf;
+                    font-family: Arial;
+                    border: 1px solid #4b4b50;
+                    border-bottom: none;
+                    padding-top: 7px;
+                    padding-bottom: 7px;
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    margin-left: 0px;
+                    margin-right: 0px;
+                    border-top-left-radius: 8px;
+                    border-top-right-radius: 8px;
+                    text-align: left;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #3a3a3c;
+                }
+                QTabBar::tab:selected {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    font-weight: 600;
+                    border-color: #5a5a60;
+                }
+            """)
+            self.general_tab.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #4b4b50;
+                    background-color: #1a1a1d;
+                    border-radius: 8px;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    background-color: #2c2c2e;
+                    color: #b8b8bf;
+                    font-family: Arial;
+                    border: 1px solid #4b4b50;
+                    border-bottom: none;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    margin-left: 0px;
+                    margin-right: 0px;
+                    border-top-left-radius: 7px;
+                    border-top-right-radius: 7px;
+                    text-align: left;
+                }
+                QTabBar::tab:selected {
+                    background-color: #1a1a1d;
+                    color: #f2f2f7;
+                    font-weight: 600;
+                    border-color: #5a5a60;
+                }
+            """)
+            self._refresh_tab_widget_style(self.phrase_tabs)
+            self._refresh_tab_widget_style(self.tabs)
+            self._refresh_tab_widget_style(self.general_tab)
+            self.add_btn.apply_theme("dark")
+            return
+
+        self.toolbar_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f2f2f7;
+                border-bottom: 1px solid #c7c7cc;
+            }
+        """)
+        self.counter_widget.setStyleSheet("""
+            QWidget {
+                background: #ffffff;
+                border: 1px solid #c7c7cc;
+                border-radius: 6px;
+                padding: 2px 6px;
+            }
+        """)
+        self.phrase_count_label.setStyleSheet("color: #000000;")
+        self.filtered_count_label.setStyleSheet("color: #8e8e93;")
+        self.editor_label.setStyleSheet("color: #000000;")
+        self.status_bar.setStyleSheet("""
+            QStatusBar {
+                background-color: #f2f2f7;
+                color: #8e8e93;
+                border-top: 1px solid #c7c7cc;
+                font-size: 12px;
+            }
+        """)
+        self.new_list_plus_btn.setStyleSheet("""
+            QPushButton#newListPlusButton {
+                background-color: #ffffff;
+                color: #007aff;
+                border: 1px solid #c7c7cc;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 700;
+                padding: 0px;
+            }
+            QPushButton#newListPlusButton:hover {
+                background-color: #f2f2f7;
+            }
+            QPushButton#newListPlusButton:pressed {
+                background-color: #e5e5ea;
+            }
+        """)
+        self.phrase_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                background-color: #ffffff;
+                border: 1px solid #c7c7cc;
+                border-radius: 10px;
+                top: -1px;
+            }
+            QTabBar::tab {
+                background-color: #eef0f4;
+                color: #2c2c2e;
+                font-family: Arial;
+                border: 1px solid #c7c7cc;
+                border-bottom: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                padding-left: 10px;
+                padding-right: 10px;
+                margin-left: 0px;
+                margin-right: 0px;
+                min-height: 20px;
+                text-align: left;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #f7f8fb;
+            }
+            QTabBar::tab:selected {
+                background-color: #ffffff;
+                color: #000000;
+                font-weight: 600;
+                border-color: #b7bcc6;
+            }
+        """)
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #c7c7cc;
+                background-color: #ffffff;
+                border-radius: 10px;
+                top: -1px;
+            }
+            QTabBar::tab {
+                background-color: #eef0f4;
+                color: #2c2c2e;
+                font-family: Arial;
+                border: 1px solid #c7c7cc;
+                border-bottom: none;
+                padding-top: 7px;
+                padding-bottom: 7px;
+                padding-left: 10px;
+                padding-right: 10px;
+                margin-left: 0px;
+                margin-right: 0px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                text-align: left;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #f7f8fb;
+            }
+            QTabBar::tab:selected {
+                background-color: #ffffff;
+                color: #000000;
+                font-weight: 600;
+                border-color: #b7bcc6;
+            }
+        """)
+        self.general_tab.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #d4d7de;
+                background-color: #fbfbfd;
+                border-radius: 8px;
+                top: -1px;
+            }
+            QTabBar::tab {
+                background-color: #f3f4f8;
+                color: #4a4a4f;
+                font-family: Arial;
+                border: 1px solid #d4d7de;
+                border-bottom: none;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                padding-left: 10px;
+                padding-right: 10px;
+                margin-left: 0px;
+                margin-right: 0px;
+                border-top-left-radius: 7px;
+                border-top-right-radius: 7px;
+                text-align: left;
+            }
+            QTabBar::tab:selected {
+                background-color: #fbfbfd;
+                color: #1f1f21;
+                font-weight: 600;
+                border-color: #c7ccd6;
+            }
+        """)
+        self._refresh_tab_widget_style(self.phrase_tabs)
+        self._refresh_tab_widget_style(self.tabs)
+        self._refresh_tab_widget_style(self.general_tab)
+        self.add_btn.apply_theme("light")
+
+    def _apply_child_theme(self):
+        theme = self.current_theme
+        for btn in (
+                self.load_btn,
+                self.save_btn,
+                self.save_session_btn,
+                self.save_as_session_btn,
+                self.load_session_btn
+        ):
+            if hasattr(btn, "apply_theme"):
+                btn.apply_theme(theme)
+
+        for panel in (
+                self.stop_words_widget,
+                self.grouping_widget,
+                self.folders_widget,
+                self.general_stop,
+                self.general_grouping,
+                self.general_folders
+        ):
+            if hasattr(panel, "apply_theme"):
+                panel.apply_theme(theme)
+
+        for i in range(self.phrase_tabs.count()):
+            tab = self.phrase_tabs.widget(i)
+            if not tab:
+                continue
+            if hasattr(tab.search_widget, "apply_theme"):
+                tab.search_widget.apply_theme(theme)
+            if hasattr(tab.table, "apply_theme"):
+                tab.table.apply_theme(theme)
+
     def setup_style(self):
+        if self.current_theme == "dark":
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #161618;
+                    color: #f2f2f7;
+                }
+                QDialog {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                }
+                QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    selection-background-color: #0a84ff;
+                    selection-color: #ffffff;
+                }
+                QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {
+                    border: 1px solid #0a84ff;
+                }
+                QPushButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    border-radius: 8px;
+                    padding: 6px 12px;
+                    font-weight: 600;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QPushButton:pressed {
+                    background-color: #48484a;
+                }
+                QPushButton:disabled {
+                    color: #8e8e93;
+                    background-color: #2a2a2d;
+                    border-color: #404045;
+                }
+                QToolButton#settingsToolbarButton {
+                    background-color: #2c2c2e;
+                    color: #4da3ff;
+                    border: 1px solid #4b4b50;
+                    border-radius: 15px;
+                    padding: 0px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    min-width: 30px;
+                    min-height: 30px;
+                }
+                QToolButton#settingsToolbarButton:hover {
+                    background-color: #3a3a3c;
+                }
+                QToolButton#settingsToolbarButton:pressed {
+                    background-color: #48484a;
+                }
+                QToolButton#settingsToolbarButton::menu-indicator {
+                    image: none;
+                    width: 0px;
+                }
+                QInputDialog QLabel {
+                    color: #f2f2f7;
+                }
+                QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit {
+                    background-color: #1c1c1e;
+                    color: #f2f2f7;
+                }
+                QMenu {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                }
+                QMenu::item:selected {
+                    background-color: #3a3a3c;
+                }
+                QMenu#settingsToolbarMenu {
+                    background-color: #2c2c2e;
+                    color: #f2f2f7;
+                    border: 1px solid #4b4b50;
+                    border-radius: 10px;
+                    padding: 6px;
+                }
+                QMenu#settingsToolbarMenu::item {
+                    padding: 7px 18px;
+                    border-radius: 6px;
+                }
+                QMenu#settingsToolbarMenu::item:selected {
+                    background-color: #3a3a3c;
+                }
+                QMenu#settingsToolbarMenu::separator {
+                    height: 1px;
+                    background: #4b4b50;
+                    margin: 6px 4px;
+                }
+            """)
+            return
+
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f2f2f7;
@@ -3647,12 +4906,52 @@ class MainWindow(QMainWindow):
                 background-color: #f2f2f7;
                 border-color: #d1d1d6;
             }
+            QToolButton#settingsToolbarButton {
+                background-color: #ffffff;
+                color: #007aff;
+                border: 1px solid #c7c7cc;
+                border-radius: 15px;
+                padding: 0px;
+                font-size: 16px;
+                font-weight: 700;
+                min-width: 30px;
+                min-height: 30px;
+            }
+            QToolButton#settingsToolbarButton:hover {
+                background-color: #f2f2f7;
+            }
+            QToolButton#settingsToolbarButton:pressed {
+                background-color: #e5e5ea;
+            }
+            QToolButton#settingsToolbarButton::menu-indicator {
+                image: none;
+                width: 0px;
+            }
             QInputDialog QLabel {
                 color: #000000;
             }
             QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit {
                 background-color: #ffffff;
                 color: #000000;
+            }
+            QMenu#settingsToolbarMenu {
+                background-color: #ffffff;
+                color: #111114;
+                border: 1px solid #cfd3dc;
+                border-radius: 10px;
+                padding: 6px;
+            }
+            QMenu#settingsToolbarMenu::item {
+                padding: 7px 18px;
+                border-radius: 6px;
+            }
+            QMenu#settingsToolbarMenu::item:selected {
+                background-color: #edf3ff;
+            }
+            QMenu#settingsToolbarMenu::separator {
+                height: 1px;
+                background: #d8dce5;
+                margin: 6px 4px;
             }
         """)
 
@@ -4089,6 +5388,7 @@ class MainWindow(QMainWindow):
                 self.general_folders.load_folders(self.global_folders)
                 self.update_global_grouping()
                 self._reposition_phrase_tab_plus()
+                self.apply_theme(self.theme_mode)
                 if self.phrase_tabs.count() > 0:
                     self.phrase_tabs.setCurrentIndex(min(current_index, self.phrase_tabs.count() - 1))
                     self.on_phrase_tab_changed(self.phrase_tabs.currentIndex())
@@ -4115,6 +5415,10 @@ class MainWindow(QMainWindow):
         tab.table.table_data_changed.connect(lambda: self.on_table_data_changed(tab))
 
         self.phrase_tabs.addTab(tab, name)
+        if hasattr(tab.search_widget, "apply_theme"):
+            tab.search_widget.apply_theme(self.current_theme)
+        if hasattr(tab.table, "apply_theme"):
+            tab.table.apply_theme(self.current_theme)
         self._reposition_phrase_tab_plus()
 
     def update_current_table_folders(self):
@@ -4132,20 +5436,6 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
-
-    palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(242, 242, 247))
-    palette.setColor(QPalette.WindowText, QColor(0, 0, 0))
-    palette.setColor(QPalette.Base, QColor(255, 255, 255))
-    palette.setColor(QPalette.AlternateBase, QColor(242, 242, 247))
-    palette.setColor(QPalette.Text, QColor(0, 0, 0))
-    palette.setColor(QPalette.Button, QColor(255, 255, 255))
-    palette.setColor(QPalette.ButtonText, QColor(0, 0, 0))
-    palette.setColor(QPalette.Highlight, QColor(0, 122, 255))
-    palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-    palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 255))
-    palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
-    app.setPalette(palette)
 
     # Проверка лицензии
     license_manager = LicenseManager()
