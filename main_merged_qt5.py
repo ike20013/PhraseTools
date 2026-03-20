@@ -37,7 +37,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QE
 from PyQt5.QtGui import (
     QFont, QPalette, QColor, QBrush, QLinearGradient,
     QKeySequence, QTextCharFormat, QTextCursor, QPainter,
-    QDrag, QIcon, QPen
+    QDrag, QIcon, QPen, QIntValidator
 )
 
 
@@ -1064,6 +1064,42 @@ class SearchHighlightDelegate(QStyledItemDelegate):
         editor.setGeometry(option.rect.adjusted(4, 2, -4, -2))
 
 
+class FrequencyEditDelegate(QStyledItemDelegate):
+    """Редактор частотности без обрезания текста"""
+
+    def createEditor(self, parent, option, index):
+        if index.column() != 2:
+            return super().createEditor(parent, option, index)
+
+        editor = QLineEdit(parent)
+        editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        editor.setValidator(QIntValidator(0, 2147483647, editor))
+        editor.setStyleSheet("""
+            QLineEdit {
+                background-color: #ffffff;
+                color: #000000;
+                border: 1px solid #007aff;
+                border-radius: 8px;
+                padding: 0px 10px;
+                margin: 0px;
+            }
+        """)
+        return editor
+
+    def setEditorData(self, editor, index):
+        value = index.data(Qt.EditRole)
+        if value is None:
+            value = index.data(Qt.DisplayRole)
+        editor.setText(str(value) if value is not None else "")
+
+    def setModelData(self, editor, model, index):
+        value_text = editor.text().strip()
+        model.setData(index, value_text if value_text else "0", Qt.EditRole)
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect.adjusted(4, 2, -4, -2))
+
+
 class CheckBoxHeader(QHeaderView):
     """Заголовок таблицы с чекбоксом в первой колонке"""
 
@@ -1227,6 +1263,7 @@ class MainPhraseTable(QTableWidget):
         self.checkbox_header = None
         self.checkbox_delegate = None
         self.search_delegate = None
+        self.frequency_delegate = None
         self.default_sort_column = 2
         self.default_sort_order = Qt.DescendingOrder
         self.setup_ui()
@@ -1240,8 +1277,10 @@ class MainPhraseTable(QTableWidget):
         self.checkbox_header.sort_checked_requested.connect(self.on_header_checked_sort_requested)
         self.checkbox_delegate = CheckboxItemDelegate(self)
         self.search_delegate = SearchHighlightDelegate(self)
+        self.frequency_delegate = FrequencyEditDelegate(self)
         self.setItemDelegateForColumn(0, self.checkbox_delegate)
         self.setItemDelegateForColumn(1, self.search_delegate)
+        self.setItemDelegateForColumn(2, self.frequency_delegate)
 
         self.setColumnCount(3)
         self.setHorizontalHeaderLabels(["", "Фраза", "Частотность"])
@@ -1572,15 +1611,57 @@ class MainPhraseTable(QTableWidget):
         return phrase, freq
 
     def on_item_changed(self, item: QTableWidgetItem):
-        if self._syncing_checkboxes or item.column() != 0:
+        if self._syncing_checkboxes:
             return
-        key = self._row_key(item.row())
-        if key is not None:
-            if item.checkState() == Qt.Checked:
-                self.checked_keys.add(key)
+        if item.column() == 0:
+            key = self._row_key(item.row())
+            if key is not None:
+                if item.checkState() == Qt.Checked:
+                    self.checked_keys.add(key)
+                else:
+                    self.checked_keys.discard(key)
+            self.update_header_checkbox_state()
+            return
+
+        if item.column() not in (1, 2):
+            return
+
+        row = item.row()
+        phrase_item = self.item(row, 1)
+        freq_item = self.item(row, 2)
+        if not phrase_item or not freq_item:
+            return
+
+        source_index = None
+        if hasattr(phrase_item, "data"):
+            source_index = phrase_item.data(Qt.UserRole)
+
+        if not isinstance(source_index, int) or source_index < 0 or source_index >= len(self.current_data):
+            if 0 <= row < len(self.current_data):
+                source_index = row
             else:
-                self.checked_keys.discard(key)
-        self.update_header_checkbox_state()
+                return
+
+        old_phrase, old_freq = self.current_data[source_index]
+        new_phrase = phrase_item.text().strip() or old_phrase
+        try:
+            new_freq = int(freq_item.text())
+        except Exception:
+            new_freq = old_freq
+        if new_freq < 0:
+            new_freq = 0
+
+        if (new_phrase, new_freq) == (old_phrase, old_freq):
+            return
+
+        data = self.current_data.copy()
+        data[source_index] = (new_phrase, new_freq)
+
+        if (old_phrase, old_freq) in self.checked_keys:
+            self.checked_keys.discard((old_phrase, old_freq))
+            self.checked_keys.add((new_phrase, new_freq))
+
+        self.apply_data_change(data)
 
     def update_header_checkbox_state(self):
         if not self.checkbox_header or self.rowCount() == 0:
@@ -1667,34 +1748,35 @@ class MainPhraseTable(QTableWidget):
         self.current_data = data.copy()
         self.checked_keys = {k for k in self.checked_keys if k in set(self.current_data)}
 
-        filtered_data = self.current_data
-        if self.stop_words:
-            filtered_data = self.processor.filter_by_stop_words(self.current_data, self.stop_words)
-
-        display_data = filtered_data
-        if self.search_text and self.search_only_matches:
-            display_data = [
-                (phrase, freq) for phrase, freq in filtered_data
-                if self.is_match(phrase)
-            ]
+        display_data = []
+        for source_index, (phrase, freq) in enumerate(self.current_data):
+            if self.stop_words:
+                phrase_words = set(phrase.lower().split())
+                if phrase_words.intersection(self.stop_words):
+                    continue
+            if self.search_text and self.search_only_matches and not self.is_match(phrase):
+                continue
+            display_data.append((source_index, phrase, freq))
 
         self.setSortingEnabled(False)
         self.setRowCount(len(display_data))
         self._syncing_checkboxes = True
 
-        for i, (phrase, freq) in enumerate(display_data):
+        for i, (source_index, phrase, freq) in enumerate(display_data):
             checkbox = CheckboxTableWidgetItem()
             checkbox.setFlags(Qt.ItemIsEnabled)
             checkbox.setCheckState(Qt.Checked if (phrase, freq) in self.checked_keys else Qt.Unchecked)
             self.setItem(i, 0, checkbox)
 
             phrase_item = QTableWidgetItem(phrase)
+            phrase_item.setData(Qt.UserRole, source_index)
             color = self.get_frequency_color(freq)
             phrase_item.setBackground(QBrush(color))
 
             self.setItem(i, 1, phrase_item)
 
             freq_item = FrequencyTableWidgetItem(freq)
+            freq_item.setData(Qt.UserRole, source_index)
             freq_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             if freq >= 100000:
@@ -2433,6 +2515,40 @@ class FoldersWidget(QWidget):
             else:
                 QMessageBox.warning(self, "Ошибка", "Папка с таким именем уже существует")
 
+    def rename_folder(self, old_name: str) -> bool:
+        if old_name not in self.folders:
+            return False
+
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Переименовать папку",
+            "Новое название папки:",
+            text=old_name
+        )
+        if not ok:
+            return False
+
+        new_name = new_name.strip()
+        if not new_name:
+            QMessageBox.warning(self, "Ошибка", "Название папки не может быть пустым")
+            return False
+        if new_name == old_name:
+            return False
+        if new_name in self.folders:
+            QMessageBox.warning(self, "Ошибка", "Папка с таким именем уже существует")
+            return False
+
+        before = self._folders_snapshot()
+        renamed_folders = {}
+        for folder_name, folder in self.folders.items():
+            if folder_name == old_name:
+                folder.name = new_name
+                renamed_folders[new_name] = folder
+            else:
+                renamed_folders[folder_name] = folder
+        self.folders = renamed_folders
+        return self._commit_if_changed(before)
+
     def delete_folder(self, folder_name: str):
         reply = QMessageBox.question(
             self,
@@ -2470,6 +2586,11 @@ class FoldersWidget(QWidget):
                     background-color: #e5e5ea;
                 }
             """)
+
+            rename_action = menu.addAction("Переименовать папку")
+            rename_action.triggered.connect(lambda: self.rename_folder(folder_name))
+
+            menu.addSeparator()
 
             delete_action = menu.addAction("Удалить папку")
             delete_action.triggered.connect(lambda: self.delete_folder(folder_name))
