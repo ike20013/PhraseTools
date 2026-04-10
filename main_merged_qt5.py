@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PhraseTools - SEO Tools with License Protection
+Phrase Tools - SEO Tools with License Protection
 """
 
 import sys
@@ -216,7 +216,7 @@ class LicenseDialog(QDialog):
     def __init__(self, license_manager: LicenseManager, parent=None):
         super().__init__(parent)
         self.license_manager = license_manager
-        self.setWindowTitle("Активация PhraseTools")
+        self.setWindowTitle("Активация Phrase Tools")
         self.setFixedSize(500, 400)
         self.setup_ui()
 
@@ -233,7 +233,7 @@ class LicenseDialog(QDialog):
 
         # Информация
         info_text = QLabel(
-            "Для использования PhraseTools необходима лицензия.\n"
+            "Для использования Phrase Tools необходима лицензия.\n"
             "Скопируйте информацию об устройстве и отправьте разработчику\n"
             "для получения лицензионного ключа."
         )
@@ -4885,7 +4885,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().installEventFilter(self)
 
     def setup_ui(self):
-        self.setWindowTitle("PhraseTools - SEO Tools [Licensed]")
+        self.setWindowTitle("Phrase Tools - SEO Tools [Licensed]")
         self.setGeometry(100, 100, 1400, 900)
 
         central_widget = QWidget()
@@ -5212,7 +5212,7 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar()
         menu_bar.setNativeMenuBar(True)
 
-        self.app_menu = menu_bar.addMenu("PhraseTools")
+        self.app_menu = menu_bar.addMenu("Phrase Tools")
 
         self.preferences_action = QAction("Настройки…", self)
         self.preferences_action.setMenuRole(QAction.PreferencesRole)
