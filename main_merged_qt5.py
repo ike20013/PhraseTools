@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PhraseTools - Modern SEO Tool with License Protection
+PhraseTools - SEO Tools with License Protection
 """
 
 import sys
@@ -4885,7 +4885,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().installEventFilter(self)
 
     def setup_ui(self):
-        self.setWindowTitle("PhraseTools - Modern SEO Tool [Licensed]")
+        self.setWindowTitle("PhraseTools - SEO Tools [Licensed]")
         self.setGeometry(100, 100, 1400, 900)
 
         central_widget = QWidget()
